@@ -1,7 +1,7 @@
 {
   "name": "bucketcode",
   "version": "0.1.0",
-  "description": "Server-side S3 uploads in three methods: upload, getUrl, delete. Works with AWS S3, Cloudflare R2, MinIO and any S3-compatible storage.",
+  "description": "Server-side S3 uploads and downloads: upload, put, get, getUrl, delete. Works with AWS S3, Cloudflare R2, MinIO and any S3-compatible storage.",
   "keywords": [
     "s3",
     "upload",

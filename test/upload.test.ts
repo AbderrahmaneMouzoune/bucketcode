@@ -43,22 +43,44 @@ describe('upload', () => {
     expect(calls[0]!.command.input.ContentType).toBe('image/png')
   })
 
-  it('applies the bucket prefix', async () => {
-    const { client } = createStubClient()
+  it('applies the bucket prefix to the object, not to the returned key', async () => {
+    const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', prefix: 'uploads', client })
 
     const result = await bucket.upload('x', { key: 'a.txt' })
 
-    expect(result.key).toBe('uploads/a.txt')
+    expect(calls[0]!.command.input.Key).toBe('uploads/a.txt')
+    // The key round-trips: it is what you hand back to get/getUrl/delete.
+    expect(result.key).toBe('a.txt')
+    expect(result.path).toBe('uploads/a.txt')
   })
 
   it('lets a per-upload prefix win', async () => {
-    const { client } = createStubClient()
+    const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', prefix: 'uploads', client })
 
     const result = await bucket.upload('x', { key: 'a.txt', prefix: 'tenant-42/avatars' })
 
-    expect(result.key).toBe('tenant-42/avatars/a.txt')
+    expect(calls[0]!.command.input.Key).toBe('tenant-42/avatars/a.txt')
+    expect(result.path).toBe('tenant-42/avatars/a.txt')
+  })
+
+  it('stores the original filename as metadata', async () => {
+    const { client, calls } = createStubClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    await bucket.upload(new File(['x'], 'Rapport été.pdf', { type: 'application/pdf' }))
+
+    expect(calls[0]!.command.input.Metadata).toEqual({ filename: encodeURIComponent('Rapport été.pdf') })
+  })
+
+  it('does not invent metadata when there is no filename', async () => {
+    const { client, calls } = createStubClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    await bucket.upload('x', { key: 'a.txt' })
+
+    expect(calls[0]!.command.input.Metadata).toBeUndefined()
   })
 
   it('guesses the content type from the key extension', async () => {

@@ -6,22 +6,58 @@ import {
   type S3Client,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import type { Readable } from 'node:stream'
 
 import { normalizeBody } from './body.js'
 import { createS3Client, resolveConfig } from './config.js'
 import { BucketCodeError } from './errors.js'
 import { assertValidKey, encodeKey, generateKey, joinKey, normalizePrefix, sanitizeFilename } from './key.js'
 import { DEFAULT_CONTENT_TYPE, lookupContentType } from './mime.js'
-import type { BucketConfig, GetUrlOptions, ResolvedConfig, UploadBody, UploadOptions, UploadResult } from './types.js'
+import type {
+  BucketConfig,
+  GetOptions,
+  GetUrlOptions,
+  PutOptions,
+  ResolvedConfig,
+  StoredFile,
+  UploadBody,
+  UploadOptions,
+  UploadResult,
+} from './types.js'
 
 /** S3 caps `DeleteObjects` at 1000 keys per request. */
 const DELETE_BATCH_SIZE = 1000
 /** SigV4 caps presigned URL lifetime at 7 days. */
 const MAX_EXPIRES_IN = 604_800
 const DEFAULT_EXPIRES_IN = 3600
+/** User metadata must be US-ASCII, so the original filename is stored encoded. */
+const FILENAME_METADATA_KEY = 'filename'
+
+/** The AWS SDK adds these helpers to the body of a `GetObject` response. */
+type SdkStream = Readable & {
+  transformToByteArray(): Promise<Uint8Array>
+  transformToString(encoding?: string): Promise<string>
+}
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function isNotFound(error: unknown): boolean {
+  const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } }
+  return (
+    candidate?.name === 'NoSuchKey' || candidate?.name === 'NotFound' || candidate?.$metadata?.httpStatusCode === 404
+  )
+}
+
+function decodeMetadataValue(value: string | undefined): string | undefined {
+  if (value == null) return undefined
+
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -33,9 +69,19 @@ function chunk<T>(items: T[], size: number): T[][] {
   return batches
 }
 
+function contentDispositionFor(download: boolean | string | undefined): string | undefined {
+  if (!download) return undefined
+  if (download === true) return 'attachment'
+
+  return `attachment; filename="${sanitizeFilename(download)}"`
+}
+
 /**
  * Server-side bucket handle. Credentials never leave the server: every method
  * talks to S3 directly, so no CORS configuration and no browser-side signing.
+ *
+ * Every method speaks the same key — the one `upload()` returns. The configured
+ * `prefix` is an internal namespace, applied on the way in and out.
  */
 export class Bucket {
   readonly bucket: string
@@ -55,7 +101,8 @@ export class Bucket {
   }
 
   /**
-   * Uploads a body to the bucket in a single `PutObject` request.
+   * Uploads a body to the bucket in a single `PutObject` request. Writing to a
+   * key that already exists replaces it — S3 has no distinct "update" call.
    *
    * Note that the payload transits through your server, so it is bound by your
    * runtime's request limit (6 MB on synchronous Lambda, 4.5 MB on Vercel
@@ -73,28 +120,32 @@ export class Bucket {
       )
     }
 
-    const name = options.key ?? generateKey(filename)
-    assertValidKey(name)
-
-    const key = joinKey(normalizePrefix(options.prefix) ?? this.config.prefix, name)
-    assertValidKey(key)
+    const key = options.key ?? generateKey(filename)
+    const path = this.resolvePath(key, options.prefix)
 
     const contentType =
       options.contentType ??
       normalized.contentType ??
-      lookupContentType(name) ??
+      lookupContentType(key) ??
       (filename ? lookupContentType(filename) : undefined) ??
       DEFAULT_CONTENT_TYPE
 
+    // Keeping the original filename lets get() hand it back, which is what you
+    // need to build a Content-Disposition when serving the file later.
+    const metadata = { ...options.metadata }
+    if (filename && metadata[FILENAME_METADATA_KEY] == null) {
+      metadata[FILENAME_METADATA_KEY] = encodeURIComponent(filename)
+    }
+
     const command = new PutObjectCommand({
       Bucket: this.bucket,
-      Key: key,
+      Key: path,
       Body: normalized.body,
       ContentType: contentType,
       ContentLength: size,
       CacheControl: options.cacheControl,
       ContentDisposition: options.contentDisposition,
-      Metadata: options.metadata,
+      Metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       ACL: options.acl,
     })
 
@@ -104,17 +155,77 @@ export class Bucket {
       return {
         bucket: this.bucket,
         key,
+        path,
         contentType,
         size,
         etag: response.ETag?.replace(/"/g, ''),
-        url: this.publicUrlFor(key),
+        url: this.publicUrlFor(path),
       }
     } catch (error) {
       throw new BucketCodeError(
         'UPLOAD_FAILED',
-        `Failed to upload "${key}" to bucket "${this.bucket}": ${describe(error)}`,
+        `Failed to upload "${path}" to bucket "${this.bucket}": ${describe(error)}`,
         { cause: error },
       )
+    }
+  }
+
+  /**
+   * Stores the file for an identifier, creating it or replacing what is already
+   * there. One object per id: `put(id, …)` then `get(id)` round-trips.
+   */
+  async put(id: string, body: UploadBody, options: PutOptions = {}): Promise<UploadResult> {
+    return this.upload(body, { ...options, key: id })
+  }
+
+  /**
+   * Reads an object back: its bytes and everything S3 knows about it.
+   * Returns `null` when the key does not exist, so a missing file is a value to
+   * branch on rather than an exception to catch.
+   *
+   * The body is a stream that can only be consumed once — use `body`, `bytes()`
+   * or `text()`, exactly one of them.
+   */
+  async get(key: string, options: GetOptions = {}): Promise<StoredFile | null> {
+    const path = this.resolvePath(key)
+
+    let response
+    try {
+      response = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: path }),
+        { abortSignal: options.signal },
+      )
+    } catch (error) {
+      if (isNotFound(error)) return null
+
+      throw new BucketCodeError(
+        'GET_FAILED',
+        `Failed to read "${path}" from bucket "${this.bucket}": ${describe(error)}`,
+        { cause: error },
+      )
+    }
+
+    const body = response.Body as SdkStream | undefined
+
+    if (!body) {
+      throw new BucketCodeError('GET_FAILED', `S3 returned no body for "${path}" in bucket "${this.bucket}".`)
+    }
+
+    const metadata = response.Metadata ?? {}
+
+    return {
+      bucket: this.bucket,
+      key,
+      path,
+      contentType: response.ContentType ?? DEFAULT_CONTENT_TYPE,
+      filename: decodeMetadataValue(metadata[FILENAME_METADATA_KEY]),
+      size: response.ContentLength,
+      etag: response.ETag?.replace(/"/g, ''),
+      lastModified: response.LastModified,
+      metadata,
+      body,
+      bytes: () => body.transformToByteArray(),
+      text: () => body.transformToString(),
     }
   }
 
@@ -123,12 +234,11 @@ export class Bucket {
    * a presigned GET otherwise. Use `signed` to force either behaviour.
    */
   async getUrl(key: string, options: GetUrlOptions = {}): Promise<string> {
-    assertValidKey(key)
-
+    const path = this.resolvePath(key)
     const wantsSigned = options.signed ?? this.config.publicUrl == null
 
     if (!wantsSigned) {
-      const url = this.publicUrlFor(key)
+      const url = this.publicUrlFor(path)
       if (!url) {
         throw new BucketCodeError(
           'URL_FAILED',
@@ -147,14 +257,14 @@ export class Bucket {
 
     const command = new GetObjectCommand({
       Bucket: this.bucket,
-      Key: key,
+      Key: path,
       ResponseContentDisposition: contentDispositionFor(options.download),
     })
 
     try {
       return await getSignedUrl(this.client, command, { expiresIn })
     } catch (error) {
-      throw new BucketCodeError('URL_FAILED', `Failed to sign a URL for "${key}": ${describe(error)}`, { cause: error })
+      throw new BucketCodeError('URL_FAILED', `Failed to sign a URL for "${path}": ${describe(error)}`, { cause: error })
     }
   }
 
@@ -166,12 +276,10 @@ export class Bucket {
     const keys = Array.isArray(key) ? key : [key]
     if (keys.length === 0) return
 
-    for (const candidate of keys) {
-      assertValidKey(candidate)
-    }
+    const paths = keys.map((candidate) => this.resolvePath(candidate))
 
-    if (keys.length === 1) {
-      const only = keys[0]!
+    if (paths.length === 1) {
+      const only = paths[0]!
 
       try {
         await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: only }))
@@ -185,7 +293,7 @@ export class Bucket {
       }
     }
 
-    for (const batch of chunk(keys, DELETE_BATCH_SIZE)) {
+    for (const batch of chunk(paths, DELETE_BATCH_SIZE)) {
       let failures: string[] = []
 
       try {
@@ -225,16 +333,19 @@ export class Bucket {
     this.s3 = undefined
   }
 
-  private publicUrlFor(key: string): string | undefined {
-    return this.config.publicUrl ? `${this.config.publicUrl}/${encodeKey(key)}` : undefined
+  /** Validates a caller-supplied key and turns it into a full object key. */
+  private resolvePath(key: string, prefix?: string): string {
+    assertValidKey(key)
+
+    const path = joinKey(normalizePrefix(prefix) ?? this.config.prefix, key)
+    assertValidKey(path)
+
+    return path
   }
-}
 
-function contentDispositionFor(download: boolean | string | undefined): string | undefined {
-  if (!download) return undefined
-  if (download === true) return 'attachment'
-
-  return `attachment; filename="${sanitizeFilename(download)}"`
+  private publicUrlFor(path: string): string | undefined {
+    return this.config.publicUrl ? `${this.config.publicUrl}/${encodeKey(path)}` : undefined
+  }
 }
 
 /** Creates a bucket handle. Cheap: the S3 client is built on first request. */

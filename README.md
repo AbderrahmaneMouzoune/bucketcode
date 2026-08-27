@@ -1,20 +1,22 @@
 # bucketcode
 
-Server-side S3 uploads, in three methods.
+Server-side S3 uploads, without the ceremony.
 
 ```ts
 const bucket = createBucket({ bucket: 'my-bucket' })
 
-await bucket.upload(file)          // → { key, url, size, etag, contentType }
-await bucket.getUrl(key)           // → public or presigned URL
-await bucket.delete(key)           // → void
+await bucket.upload(file)     // → { key, path, url?, size?, etag?, contentType }
+await bucket.put(id, file)    // one file per identifier: create or replace
+await bucket.get(id)          // → the file back, or null
+await bucket.getUrl(id)       // → public or presigned URL
+await bucket.delete(id)       // → void
 ```
 
 No presigned POST to orchestrate, no CORS rules to write on the bucket, no browser-side
 signing: your credentials stay on the server and every call goes straight to S3. Works
 with AWS S3 and any S3-compatible storage (Cloudflare R2, MinIO, Scaleway, Wasabi, Ceph).
 
-- **Small surface.** Three methods, all server-side. No dual client/server mode, no
+- **Small surface.** Five methods, all server-side. No dual client/server mode, no
   conditional branches depending on where the code runs.
 - **Typed.** Written in TypeScript, ESM + CJS, no `any` in the public API.
 - **Safe by default.** Keys are validated (no traversal, no absolute paths), content types
@@ -64,6 +66,74 @@ const { key, size } = await bucket.upload(Buffer.from('hello'), { key: 'greeting
 const url = await bucket.getUrl(key, { expiresIn: 900 })
 
 await bucket.delete(key)
+```
+
+### One file per identifier
+
+Generate an id, store the file under it, read it back later. This is the shape most
+apps actually need: a row in your database holds `XK5892`, and the bucket holds the
+file for it.
+
+```ts
+import { nanoid } from 'nanoid'
+import { createBucket } from 'bucketcode'
+
+const bucket = createBucket({ bucket: 'my-bucket', prefix: 'files' })
+
+const id = nanoid(6) // "XK5892"
+
+await bucket.put(id, file)        // create
+await bucket.put(id, newVersion)  // replace — same id, no cleanup to do
+
+const stored = await bucket.get(id)
+
+if (stored) {
+  stored.filename       // "rapport.pdf" — the name it was uploaded with
+  stored.contentType    // "application/pdf"
+  stored.size           // 48213
+  await stored.bytes()  // Uint8Array
+}
+```
+
+`put()` writes to the id, so writing again replaces what is there — S3 has no
+separate update call. `get()` returns `null` when nothing is stored under that id,
+so a missing file is a value you branch on rather than an exception you catch.
+
+The configured `prefix` stays internal: you store `"XK5892"`, the bucket holds
+`files/XK5892`, and every method takes the plain id.
+
+#### Serving it back
+
+Cheapest — your server signs a URL and S3 serves the bytes:
+
+```ts
+// app/api/files/[id]/route.ts
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+
+  return Response.redirect(await bucket.getUrl(id, { expiresIn: 60 }))
+}
+```
+
+Or stream it through your route, when you need to check permissions or answer 404
+yourself:
+
+```ts
+import { Readable } from 'node:stream'
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const file = await bucket.get(id)
+
+  if (!file) return new Response('Not found', { status: 404 })
+
+  return new Response(Readable.toWeb(file.body) as ReadableStream, {
+    headers: {
+      'Content-Type': file.contentType,
+      ...(file.filename ? { 'Content-Disposition': `inline; filename="${file.filename}"` } : {}),
+    },
+  })
+}
 ```
 
 ### Next.js App Router
@@ -127,7 +197,7 @@ createBucket({
   endpoint: 'https://…',      // S3-compatible storage — or BUCKETCODE_ENDPOINT / S3_ENDPOINT
   forcePathStyle: true,       // defaults to true when `endpoint` is set
   publicUrl: 'https://cdn…',  // public bucket or CDN — or BUCKETCODE_PUBLIC_URL / S3_PUBLIC_URL
-  prefix: 'uploads',          // prepended to every key
+  prefix: 'uploads',          // internal namespace, applied on the way in and out
   maxSize: 5 * 1024 * 1024,   // reject bigger uploads before any network call
   client: myS3Client,         // bring your own S3Client (retries, proxy, tests)
 })
@@ -193,7 +263,8 @@ Returns:
 ```ts
 {
   bucket: string
-  key: string          // final key, prefix included
+  key: string          // the handle: pass it back to get/getUrl/delete
+  path: string         // full object key in the bucket, prefix included
   contentType: string
   size?: number
   etag?: string        // quotes stripped
@@ -203,6 +274,45 @@ Returns:
 
 `url` is deliberately absent on a private bucket: a URL that returns 403 is worse than no
 URL at all.
+
+`key` never carries the configured `prefix` — it is what you store and hand back to the
+other methods. `path` is the real object key, for the AWS console or another tool.
+
+### `put(id, body, options?)`
+
+`upload(body, { key: id })`, with the id first because that reads better for the one
+file per identifier case. Same options minus `key`, same result.
+
+```ts
+await bucket.put('XK5892', file)
+```
+
+Writing to an id that already holds a file replaces it.
+
+### `get(key, options?)`
+
+Reads an object back, or `null` when the key does not exist.
+
+```ts
+const file = await bucket.get('XK5892')
+```
+
+| Field | Type |
+| --- | --- |
+| `bucket`, `key`, `path` | `string` |
+| `contentType` | `string` |
+| `filename` | `string \| undefined` — the name it was uploaded with |
+| `size`, `etag`, `lastModified` | `number` / `string` / `Date`, when S3 reports them |
+| `metadata` | `Record<string, string>` — raw S3 user metadata, keys lowercased |
+| `body` | `Readable` |
+| `bytes()` | `Promise<Uint8Array>` |
+| `text()` | `Promise<string>` |
+
+The body can only be read once: use `body`, `bytes()` **or** `text()`, exactly one of
+them. Accepts `{ signal }` to abort.
+
+The filename comes from metadata that `upload()` and `put()` write for you whenever the
+body carries one (a `File`, or an explicit `filename` option).
 
 ### `getUrl(key, options?)`
 
@@ -267,6 +377,7 @@ try {
 | `MISSING_CONTENT_LENGTH` | stream uploaded without `contentLength` |
 | `FILE_TOO_LARGE` | body above the configured `maxSize` |
 | `UPLOAD_FAILED` | `PutObject` rejected — original error in `cause` |
+| `GET_FAILED` | `GetObject` rejected for a reason other than a missing key, or answered without a body |
 | `DELETE_FAILED` | `DeleteObject(s)` rejected, or S3 reported per-key errors |
 | `URL_FAILED` | invalid `expiresIn`, signing failure, or public URL requested without `publicUrl` |
 
@@ -289,10 +400,10 @@ const bucket = createBucket({
 
 ## Roadmap
 
-- **v0.1** — `upload` / `getUrl` / `delete`, server-side only. ✅
+- **v0.1** — `upload` / `put` / `get` / `getUrl` / `delete`, server-side only. ✅
 - **v0.2** — multipart upload for large files (streams without `contentLength`), presigned
   PUT/POST so the browser can talk to S3 directly and bypass the payload limits above.
-- **v0.3** — `list()`, `copy()`, object metadata.
+- **v0.3** — `list()`, `copy()`, `head()` to check an id without downloading it.
 
 ## License
 

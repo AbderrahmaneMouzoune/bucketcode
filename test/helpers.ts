@@ -38,3 +38,21 @@ export function clearBucketEnv(): void {
     vi.stubEnv(name, undefined)
   }
 }
+
+/** Mimics the body of a `GetObject` response, with the AWS SDK stream helpers. */
+export function s3Body(content: string) {
+  const bytes = new TextEncoder().encode(content)
+
+  return {
+    transformToByteArray: async () => bytes,
+    transformToString: async () => content,
+  }
+}
+
+/** The error the AWS SDK raises when the key does not exist. */
+export function notFoundError(): Error {
+  return Object.assign(new Error('The specified key does not exist.'), {
+    name: 'NoSuchKey',
+    $metadata: { httpStatusCode: 404 },
+  })
+}

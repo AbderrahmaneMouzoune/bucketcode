@@ -9,6 +9,7 @@ export type BucketCodeErrorCode =
   | 'MISSING_CONTENT_LENGTH'
   | 'FILE_TOO_LARGE'
   | 'UPLOAD_FAILED'
+  | 'GET_FAILED'
   | 'DELETE_FAILED'
   | 'URL_FAILED'
 

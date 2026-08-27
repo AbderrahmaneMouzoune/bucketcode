@@ -3,7 +3,10 @@ export { BucketCodeError, isBucketCodeError, type BucketCodeErrorCode } from './
 export type {
   BucketConfig,
   BucketCredentials,
+  GetOptions,
   GetUrlOptions,
+  PutOptions,
+  StoredFile,
   UploadBody,
   UploadOptions,
   UploadResult,

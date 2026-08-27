@@ -87,10 +87,18 @@ export interface UploadOptions {
   signal?: AbortSignal
 }
 
+/** `upload()` options minus the key, which `put()` takes as its first argument. */
+export type PutOptions = Omit<UploadOptions, 'key'>
+
 export interface UploadResult {
   bucket: string
-  /** Final key, including any prefix. */
+  /**
+   * The handle for this object: pass it back to `get()`, `getUrl()` or
+   * `delete()`. Does not include the configured `prefix`.
+   */
   key: string
+  /** Full object key in the bucket, `prefix` included. */
+  path: string
   contentType: string
   /** Byte size, when known. */
   size?: number
@@ -98,6 +106,33 @@ export interface UploadResult {
   etag?: string
   /** Only set when `publicUrl` is configured — otherwise use `getUrl()`. */
   url?: string
+}
+
+export interface GetOptions {
+  signal?: AbortSignal
+}
+
+export interface StoredFile {
+  bucket: string
+  /** The key you asked for, without the configured `prefix`. */
+  key: string
+  /** Full object key in the bucket, `prefix` included. */
+  path: string
+  contentType: string
+  /** Original filename, when it was known at upload time. */
+  filename?: string
+  size?: number
+  etag?: string
+  lastModified?: Date
+  /** Raw S3 user metadata. Keys come back lowercased. */
+  metadata: Record<string, string>
+  /**
+   * The object body. It can only be read once, so use `body`, `bytes()` or
+   * `text()` — exactly one of them.
+   */
+  body: Readable
+  bytes(): Promise<Uint8Array>
+  text(): Promise<string>
 }
 
 export interface GetUrlOptions {
