@@ -1,54 +1,76 @@
 export const metadata = {
   title: 'Introduction',
-  description: 'What bucketcode is, what it deliberately is not, and when to reach for something else.',
+  description: 'IndexedDB never leaves the browser it was written in. bucketcode is the piece that carries it across.',
 }
 
 # bucketcode
 
-Server-side S3 uploads, without the ceremony.
+Move a local-first app's data from one device to another, through your own bucket.
 
 ```ts
-const bucket = createBucket({ bucket: 'my-bucket' })
+import { createBucket, createSyncCode, normalizeSyncCode } from 'bucketcode'
 
-await bucket.upload(file) // → { key, path, url?, size?, etag?, contentType }
-await bucket.put(id, file) // one file per identifier: create or replace
-await bucket.get(id) // → the file back, or null
-await bucket.getUrl(id) // → public or presigned URL
-await bucket.delete(id) // → void
+const bucket = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
+
+// On the old device: hand the user a code.
+const code = createSyncCode() // "K7QP2M4X"
+await bucket.putSnapshot(code, state, { app: 'notes', version: 3, expiresIn: 3600 })
+
+// On the new device: they type it in.
+const snapshot = await bucket.getSnapshot(normalizeSyncCode(typed), { maxVersion: 3 })
+snapshot?.data // → the state, ready to write back into IndexedDB
 ```
 
-Every method runs a plain AWS SDK command from your server. Your credentials never reach the
-browser, so there is no CORS policy to write on the bucket and nothing to sign client-side.
+## The problem
 
-## What you get
+Local-first is a good trade. Keep everything in IndexedDB and the app is instant, works offline,
+and nobody's notes sit on your server by default.
 
-- **A small surface.** Five methods, all server-side. No dual client/server mode, no branch in
-  the code depending on where it runs.
-- **Keys that round-trip.** What `upload()` returns is what you hand back to `get()`, `getUrl()`
-  and `delete()`. The configured prefix is an internal namespace.
-- **Safety before the network.** Object keys are validated against traversal and absolute paths,
-  content types are detected, and size limits are enforced before a single byte leaves your server.
-- **Typed errors.** Everything throws a `BucketCodeError` carrying a stable `code`, with the
-  original error in `cause`.
-- **Any S3-compatible storage.** AWS S3, Cloudflare R2, MinIO, Scaleway, Wasabi, Ceph.
+Then the user gets a new phone.
+
+IndexedDB is scoped to one origin _in one browser profile on one device_. There is no sync, no
+export, no "sign in and it appears". Clearing site data wipes it. Safari evicts it after seven
+days without a visit. From the user's side this reads as "the app lost my data" — which is,
+functionally, what happened.
+
+Building the way out is where local-first apps stall: you need a place to put the bytes, a way for
+the second device to find them, and enough structure that a restore does not corrupt the app.
+
+## What bucketcode does
+
+It is the server-side piece of exactly that. Your app hands its local state to your own API; that
+route stores a **snapshot** in a bucket you control, under a short **sync code**; the other device
+sends the code back and gets the state.
+
+- **Credentials stay on your server.** The browser only ever talks to your API. No CORS policy on
+  the bucket, no signing in the client, no S3 keys shipped to a phone.
+- **Snapshots are self-describing.** What lands in the bucket carries the app name, your schema
+  version, the device that wrote it and its timestamps — so a restore can refuse data it cannot
+  read instead of corrupting the database.
+- **Codes are made to be typed.** [Crockford base32](https://www.crockford.com/base32.html), no
+  characters people confuse, folded on the way back in: `oil5` and `0IL5` find the same snapshot.
+- **Concurrent writes are detectable.** Two devices writing the same key is a race; `ifMatch`
+  turns it into an error you can handle rather than data you silently lose.
+- **Compression is on by default.** An IndexedDB dump is repetitive JSON, so gzip routinely cuts
+  it by 5–10× — which is what keeps it under your runtime's request limit.
 
 ## What it is not
 
-bucketcode sends the bytes from your server to S3 in a single `PutObject` request. That is the
-whole design, and it comes with one constraint you have to know about: the file transits through
-your runtime, so your runtime's request size limit applies — 6 MB on synchronous Lambda, 4.5 MB on
-Vercel serverless functions.
+It is **not a sync engine.** There is no operational transform, no CRDT, no per-record merge.
+A snapshot is the whole state at a point in time, and restoring replaces what is on the receiving
+device. That is the right model for "move my data to my new phone" and the wrong one for "two
+people edit the same document live". If you need the latter, you want a CRDT library — and
+bucketcode can still be where you park its state.
 
-Below those limits — avatars, documents, images, CSV exports — this is the simplest thing that
-works. Above them, a single `PutObject` is the wrong tool. See [Size limits and
-streams](/docs/limits) for the full picture and what v0.2 does about it.
+It is **not a general S3 client.** No `list()`, no bucket administration, no lifecycle rules. It
+hands you its underlying client through `bucket.client`, so the AWS SDK is always one command away.
 
-It is also not a general S3 client. There is no `list()`, no bucket administration, no lifecycle
-rules. If you need those, reach for `@aws-sdk/client-s3` directly — bucketcode hands you its
-underlying client through `bucket.client`, so the two mix freely.
+It is **not encryption.** Your server can read every snapshot it stores. If that is not acceptable
+for your data, encrypt it in the browser and hand bucketcode the ciphertext — see
+[end-to-end encrypted sync](/docs/use-cases/encrypted-sync).
 
 ## Where to go next
 
-- [Installation](/docs/installation) — one package, two peer-free dependencies.
-- [Quick start](/docs/quick-start) — upload a file and read it back in a dozen lines.
-- [One file per identifier](/docs/use-cases/file-per-id) — the shape most applications need.
+- [Quick start](/docs/quick-start) — the two routes, and the client half around them.
+- [Snapshots](/docs/snapshots) — the envelope, compression, schema versions, expiry.
+- [Move to a new device](/docs/use-cases/new-device) — the flow end to end.

@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </Link>
           <nav className="header-nav">
             <Link href="/docs">Docs</Link>
-            <Link href="/docs/use-cases/file-per-id">Use cases</Link>
+            <Link href="/docs/use-cases/new-device">Use cases</Link>
             <Link href="/docs/api">API</Link>
             <a href={REPOSITORY}>GitHub</a>
           </nav>

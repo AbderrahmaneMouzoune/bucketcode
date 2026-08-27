@@ -18,8 +18,8 @@ createBucket({
   endpoint: 'https://…', // S3-compatible storage — or BUCKETCODE_ENDPOINT / S3_ENDPOINT
   forcePathStyle: true, // defaults to true when `endpoint` is set
   publicUrl: 'https://cdn…', // public bucket or CDN — or BUCKETCODE_PUBLIC_URL / S3_PUBLIC_URL
-  prefix: 'uploads', // internal namespace, applied on the way in and out
-  maxSize: 5 * 1024 * 1024, // reject bigger uploads before any network call
+  prefix: 'snapshots', // internal namespace, applied on the way in and out
+  maxSize: 5 * 1024 * 1024, // reject bigger writes before any network call
   client: myS3Client, // bring your own S3Client
 })
 ```
@@ -44,23 +44,27 @@ The prefix is applied on the way in and stripped on the way out, so the identifi
 your database is the one you hand back to every method:
 
 ```ts
-const bucket = createBucket({ bucket: 'my-bucket', prefix: 'files' })
+const bucket = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
 
-const result = await bucket.put('XK5892', file)
+const result = await bucket.putSnapshot('K7QP2M4X', state)
 
-result.key // "XK5892"       — the handle you store and reuse
-result.path // "files/XK5892" — the real object key, for the AWS console
+result.key // "K7QP2M4X" — the code the user carries
+result.path // "snapshots/K7QP2M4X" — the real object key, for the AWS console
 
-await bucket.get('XK5892') // reads files/XK5892
-await bucket.delete('XK5892') // deletes files/XK5892
+await bucket.getSnapshot('K7QP2M4X') // reads snapshots/K7QP2M4X
+await bucket.delete('K7QP2M4X') // deletes snapshots/K7QP2M4X
 ```
 
-`upload()` also takes a per-call `prefix` that overrides the bucket-level one, which is how you
-partition by tenant:
+Every method takes a per-call `prefix` that overrides the bucket-level one, which is how you keep
+transfer codes, per-account backups and attachments apart:
 
 ```ts
-await bucket.upload(file, { prefix: `tenant-${tenantId}` })
+await bucket.putSnapshot(`user-${userId}`, state, { prefix: 'backups' })
+await bucket.getSnapshot(`user-${userId}`, { prefix: 'backups' })
 ```
+
+Separating them early is what lets you give each one its own S3 lifecycle rule: a transfer code
+should expire in a day, a backup should not expire at all.
 
 ## Public URLs
 
@@ -94,7 +98,7 @@ await bucket.upload(tooBig) // throws BucketCodeError { code: 'FILE_TOO_LARGE' }
 ```
 
 Set it below your runtime's own request limit and you get a clean 413 instead of a truncated
-request. See [Size limits and streams](/docs/limits).
+request. See [How big can a snapshot be](/docs/limits).
 
 ## Bringing your own client
 

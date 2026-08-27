@@ -12,6 +12,10 @@ export type BucketCodeErrorCode =
   | 'GET_FAILED'
   | 'DELETE_FAILED'
   | 'URL_FAILED'
+  | 'PRECONDITION_FAILED'
+  | 'INVALID_SNAPSHOT'
+  | 'INVALID_SYNC_CODE'
+  | 'SNAPSHOT_TOO_NEW'
 
 export class BucketCodeError extends Error {
   readonly code: BucketCodeErrorCode

@@ -1,9 +1,10 @@
-import { createBucket, isBucketCodeError } from 'bucketcode'
-import { nanoid } from 'nanoid'
+import { createBucket, createSyncCode, isBucketCodeError, normalizeSyncCode } from 'bucketcode'
 
 /**
- * Exercises the whole API against a real bucket: create, read, replace, sign,
- * delete. Point it at a local MinIO and it costs nothing to run.
+ * Exercises a transfer end to end against a real bucket: write a snapshot under
+ * a code, read it back through a sloppily typed version of that code, prove the
+ * conditional writes work, then clean up. Point it at a local MinIO and it costs
+ * nothing to run.
  */
 const bucket = createBucket({
   bucket: process.env.S3_BUCKET,
@@ -13,23 +14,60 @@ const bucket = createBucket({
   maxSize: 1024 * 1024,
 })
 
-const id = nanoid(6)
+/** Stands in for what an app dumps out of IndexedDB. */
+const state = {
+  notes: Array.from({ length: 200 }, (_, index) => ({
+    id: `note-${index}`,
+    title: `Note ${index}`,
+    body: 'the quick brown fox jumps over the lazy dog',
+    updatedAt: 1756296000000 + index,
+  })),
+}
+
+const code = createSyncCode()
 
 try {
-  const created = await bucket.put(id, 'first version', { filename: 'notes.txt' })
-  console.log('created  ', created.key, '→', created.path, `(${created.size} bytes)`)
+  const written = await bucket.putSnapshot(code, state, {
+    app: 'round-trip',
+    version: 1,
+    device: 'node-script',
+    expiresIn: 60,
+    ifAbsent: true,
+  })
 
-  const first = await bucket.get(id)
-  console.log('read     ', await first?.text(), '|', first?.filename, '|', first?.contentType)
+  const raw = JSON.stringify(state).length
+  console.log(`code      ${code}`)
+  console.log(`stored    ${written.size} bytes gzipped, from ${raw} raw (${(raw / (written.size ?? 1)).toFixed(1)}x)`)
 
-  await bucket.put(id, 'second version, longer', { filename: 'notes.txt' })
-  const second = await bucket.get(id)
-  console.log('replaced ', await second?.text(), `(${second?.size} bytes)`)
+  // The other device types it in lowercase, with a dash, and gets the same object.
+  const typed = `${code.slice(0, 4)}-${code.slice(4)}`.toLowerCase()
+  const restored = await bucket.getSnapshot<typeof state>(normalizeSyncCode(typed), { maxVersion: 1 })
 
-  console.log('signed   ', (await bucket.getUrl(id, { expiresIn: 60 })).slice(0, 80), '…')
+  console.log(`typed     "${typed}" → ${normalizeSyncCode(typed)}`)
+  console.log(
+    `restored  ${restored?.data.notes.length} notes from ${restored?.device}, written ${restored?.createdAt.toISOString()}`,
+  )
+  console.log(`identical ${JSON.stringify(restored?.data) === JSON.stringify(state)}`)
 
-  await bucket.delete(id)
-  console.log('deleted  ', (await bucket.get(id)) === null ? 'gone' : 'still there')
+  // A second device claiming the same code loses.
+  try {
+    await bucket.putSnapshot(code, state, { ifAbsent: true })
+    console.log('claim     UNEXPECTED: the second claim succeeded')
+  } catch (error) {
+    console.log(`claim     rejected as ${isBucketCodeError(error) ? error.code : 'unknown'}`)
+  }
+
+  // A write based on a stale read loses too.
+  await bucket.putSnapshot(code, { notes: [] })
+  try {
+    await bucket.putSnapshot(code, { notes: [] }, { ifMatch: written.etag })
+    console.log('ifMatch   UNEXPECTED: the stale write succeeded')
+  } catch (error) {
+    console.log(`ifMatch   rejected as ${isBucketCodeError(error) ? error.code : 'unknown'}`)
+  }
+
+  await bucket.delete(code)
+  console.log(`burned    ${(await bucket.getSnapshot(code)) === null ? 'gone' : 'still there'}`)
 } catch (error) {
   if (isBucketCodeError(error)) {
     console.error(`${error.code}: ${error.message}`)

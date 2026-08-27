@@ -5,79 +5,138 @@ export const metadata = {
 
 # Testing
 
-## Inject a fake client
+## A bucket in memory
 
-`config.client` accepts anything shaped like an `S3Client`, so a stub that records the commands it
-receives is enough to test your own upload paths:
+The highest-value stand-in is a fake `S3Client` that actually stores what it is given, because
+then a snapshot genuinely round-trips — including the conditional headers, which is where the
+interesting bugs live:
 
 ```ts
 import type { S3Client } from '@aws-sdk/client-s3'
 import { createBucket } from 'bucketcode'
 
-function fakeBucket() {
-  const calls: { name: string; input: Record<string, any> }[] = []
+export function memoryBucket() {
+  const objects = new Map<string, { body: Uint8Array; etag: string }>()
+  let counter = 0
 
   const client = {
     send: async (command: any) => {
-      calls.push({ name: command.constructor.name, input: command.input })
-      return { ETag: '"stub"' }
+      const { Key, Body, IfMatch, IfNoneMatch } = command.input
+      const stored = objects.get(Key)
+
+      switch (command.constructor.name) {
+        case 'PutObjectCommand': {
+          if (IfNoneMatch === '*' && stored) throw precondition()
+          if (IfMatch != null && (!stored || IfMatch !== `"${stored.etag}"`)) throw precondition()
+
+          counter += 1
+          objects.set(Key, { body: Buffer.from(Body), etag: `etag-${counter}` })
+
+          return { ETag: `"etag-${counter}"` }
+        }
+
+        case 'GetObjectCommand': {
+          if (!stored) throw notFound()
+
+          return {
+            Body: {
+              transformToByteArray: async () => stored.body,
+              transformToString: async () => Buffer.from(stored.body).toString('utf8'),
+            },
+            ETag: `"${stored.etag}"`,
+            ContentLength: stored.body.byteLength,
+          }
+        }
+
+        case 'DeleteObjectCommand':
+          objects.delete(Key)
+          return {}
+
+        default:
+          throw new Error(`Unexpected command: ${command.constructor.name}`)
+      }
     },
   } as unknown as S3Client
 
-  return { bucket: createBucket({ bucket: 'test', client }), calls }
+  return createBucket({ bucket: 'test', client })
 }
+
+const precondition = () =>
+  Object.assign(new Error('precondition failed'), {
+    name: 'PreconditionFailed',
+    $metadata: { httpStatusCode: 412 },
+  })
+
+const notFound = () =>
+  Object.assign(new Error('no such key'), { name: 'NoSuchKey', $metadata: { httpStatusCode: 404 } })
 ```
 
+With that, the tests read like the feature:
+
 ```ts
-it('uploads the avatar under the user id', async () => {
-  const { bucket, calls } = fakeBucket()
+it('carries the database to the other device', async () => {
+  const bucket = memoryBucket()
 
-  await saveAvatar(bucket, 42, new File(['x'], 'me.png', { type: 'image/png' }))
+  const code = createSyncCode()
+  await bucket.putSnapshot(code, { notes: [{ id: 1, title: 'Roof' }] }, { version: 3 })
 
-  expect(calls[0].input.Key).toBe('avatars/42')
-  expect(calls[0].input.ContentType).toBe('image/png')
+  const restored = await bucket.getSnapshot(normalizeSyncCode(code.toLowerCase()), { maxVersion: 3 })
+
+  expect(restored?.data).toEqual({ notes: [{ id: 1, title: 'Roof' }] })
+})
+
+it('refuses a write when another device got there first', async () => {
+  const bucket = memoryBucket()
+
+  const first = await bucket.putSnapshot('user-42', { notes: [] })
+  await bucket.putSnapshot('user-42', { notes: ['from the phone'] })
+
+  await expect(
+    bucket.putSnapshot('user-42', { notes: ['from the laptop'] }, { ifMatch: first.etag }),
+  ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
 })
 ```
 
-A stub covers `upload()`, `put()`, `get()` and `delete()`. It does **not** cover `getUrl()`, which
-signs with the real SDK — see below.
+## Testing expiry
 
-## Faking get()
-
-`get()` reads the SDK's stream helpers off the response body, so a stub for it returns those two
-functions:
+Expiry is decided from the envelope's `expiresAt` against the current time, so fake timers are
+enough — no waiting, no sleeping:
 
 ```ts
-const client = {
-  send: async () => ({
-    Body: {
-      transformToByteArray: async () => new TextEncoder().encode('hello'),
-      transformToString: async () => 'hello',
-    },
-    ContentType: 'text/plain',
-    Metadata: { filename: 'greeting.txt' },
-  }),
-} as unknown as S3Client
+it('stops answering once the code expires', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-08-27T12:00:00Z'))
+
+  const bucket = memoryBucket()
+  await bucket.putSnapshot('K7QP2M4X', { notes: [] }, { expiresIn: 3600 })
+
+  vi.setSystemTime(new Date('2026-08-27T13:00:01Z'))
+
+  expect(await bucket.getSnapshot('K7QP2M4X')).toBeNull()
+})
 ```
 
-To test the missing-file path, throw the error S3 raises:
+## A recording stub is enough for simpler cases
+
+When you only want to assert what was sent, a stub that records commands does the job:
 
 ```ts
+const calls: any[] = []
+
 const client = {
-  send: async () => {
-    throw Object.assign(new Error('no such key'), {
-      name: 'NoSuchKey',
-      $metadata: { httpStatusCode: 404 },
-    })
+  send: async (command: any) => {
+    calls.push(command)
+    return { ETag: '"stub"' }
   },
 } as unknown as S3Client
-
-expect(await bucket.get('XK5892')).toBeNull()
 ```
+
+It covers `putSnapshot`, `upload`, `put` and `delete`. It does **not** cover `getUrl()`, which
+signs with the real SDK.
 
 ## Testing signed URLs
 
-Signing is a local computation, so it needs credentials but no network. Pass static ones:
+Signing is a local computation: it needs credentials, but no network. Pass static ones:
 
 ```ts
 const bucket = createBucket({
@@ -97,6 +156,7 @@ expect(url.searchParams.get('X-Amz-Signature')).toBeTruthy()
 
 ## Against a real bucket
 
-For an integration test that exercises the actual protocol, run MinIO and point bucketcode at it.
-See [S3-compatible providers](/docs/providers) for the container command. It catches the class of
-bug a stub cannot: checksum headers, path style, content-type round-trips.
+An in-memory double cannot catch what only the real protocol does: checksum headers, path-style
+addressing, and whether your provider actually honours `If-Match` on `PutObject` — support for
+that arrived late, and not every S3-compatible service has it. Run MinIO and point an example at
+it; see [S3-compatible providers](/docs/providers) for the container command.

@@ -19,11 +19,19 @@ export const navigation: NavSection[] = [
     ],
   },
   {
+    title: 'Core concepts',
+    links: [
+      { title: 'Snapshots', href: '/docs/snapshots' },
+      { title: 'Sync codes', href: '/docs/sync-codes' },
+      { title: 'Two devices, one snapshot', href: '/docs/two-devices' },
+    ],
+  },
+  {
     title: 'Guides',
     links: [
       { title: 'Configuration', href: '/docs/configuration' },
       { title: 'S3-compatible providers', href: '/docs/providers' },
-      { title: 'Size limits and streams', href: '/docs/limits' },
+      { title: 'How big can a snapshot be', href: '/docs/limits' },
       { title: 'Errors', href: '/docs/errors' },
       { title: 'Testing', href: '/docs/testing' },
     ],
@@ -32,24 +40,24 @@ export const navigation: NavSection[] = [
     title: 'Use cases',
     links: [
       {
-        title: 'One file per identifier',
-        href: '/docs/use-cases/file-per-id',
-        description: 'A row in your database holds XK5892, the bucket holds the file for it.',
+        title: 'Move to a new device',
+        href: '/docs/use-cases/new-device',
+        description: 'A code on the old phone, typed into the new one. The whole database follows.',
       },
       {
-        title: 'User avatars',
-        href: '/docs/use-cases/user-avatars',
-        description: 'Public bucket, CDN URL, one object per user, replaced on every change.',
+        title: 'Continuous backup',
+        href: '/docs/use-cases/continuous-backup',
+        description: 'One snapshot per account, rewritten as the local database changes.',
       },
       {
-        title: 'Private documents',
-        href: '/docs/use-cases/private-documents',
-        description: 'Invoices and contracts behind a permission check and a short-lived URL.',
+        title: 'End-to-end encrypted sync',
+        href: '/docs/use-cases/encrypted-sync',
+        description: 'Encrypt in the browser with a passphrase. Your server stores bytes it cannot read.',
       },
       {
-        title: 'Generated exports',
-        href: '/docs/use-cases/generated-exports',
-        description: 'A CSV or PDF your server builds, uploaded from memory and handed back as a download.',
+        title: 'Attachments beside the data',
+        href: '/docs/use-cases/attachments',
+        description: 'The blobs an IndexedDB app holds, carried across with the records that point at them.',
       },
     ],
   },

@@ -5,6 +5,9 @@ export const metadata = {
 
 # API reference
 
+The snapshot API is the one most applications use. The file API underneath it stays available for
+everything that is not a snapshot — attachments, exports, avatars.
+
 ## `createBucket(config?)`
 
 Returns a `Bucket`. Cheap: the underlying `S3Client` is built on the first request, so calling it
@@ -15,6 +18,88 @@ const bucket = createBucket({ bucket: 'my-bucket', region: 'eu-west-3' })
 ```
 
 `new Bucket(config)` is equivalent, and exported for when you want to subclass or type against it.
+
+---
+
+## `putSnapshot(key, data, options?)`
+
+Stores a snapshot of an application's local state. The value is wrapped in a self-describing
+envelope, serialized as JSON and gzipped. See [Snapshots](/docs/snapshots).
+
+```ts
+const result = await bucket.putSnapshot(code, state, { app: 'notes', version: 3, expiresIn: 3600 })
+```
+
+| Option      | Type               | Default                                       |
+| ----------- | ------------------ | --------------------------------------------- |
+| `app`       | `string`           | — stamped in the envelope                     |
+| `version`   | `number`           | — your schema version                         |
+| `device`    | `string`           | — free label for the writing device           |
+| `expiresIn` | `number` (seconds) | — no expiry                                   |
+| `compress`  | `boolean`          | `true`                                        |
+| `ifMatch`   | `string`           | — write only if the stored ETag still matches |
+| `ifAbsent`  | `boolean`          | — write only if nothing is stored yet         |
+| `prefix`    | `string`           | the bucket-level `prefix`                     |
+| `signal`    | `AbortSignal`      | —                                             |
+
+Returns `{ bucket, key, path, etag?, size?, compressed, createdAt, expiresAt? }`. Keep the `etag`
+when another device may write the same key — see [two devices](/docs/two-devices).
+
+Throws `INVALID_SNAPSHOT` when the data is not JSON-serializable, and `PRECONDITION_FAILED` when
+an `ifMatch` or `ifAbsent` write loses the race.
+
+---
+
+## `getSnapshot(key, options?)`
+
+Reads a snapshot back, or `null` when there is none — including one past its `expiresAt`, which is
+never handed over even while the object is still in the bucket.
+
+```ts
+const snapshot = await bucket.getSnapshot<AppState>(code, { maxVersion: SCHEMA_VERSION })
+```
+
+| Option       | Type                                          |
+| ------------ | --------------------------------------------- |
+| `maxVersion` | `number` — throws `SNAPSHOT_TOO_NEW` above it |
+| `prefix`     | `string`                                      |
+| `signal`     | `AbortSignal`                                 |
+
+| Field                   | Type                                      |
+| ----------------------- | ----------------------------------------- |
+| `data`                  | `T` — the generic you passed, unvalidated |
+| `app`, `device`         | `string \| undefined`                     |
+| `version`               | `number \| undefined`                     |
+| `createdAt`             | `Date`                                    |
+| `expiresAt`             | `Date \| undefined`                       |
+| `etag`, `size`          | `string` / `number`, when S3 reports them |
+| `bucket`, `key`, `path` | `string`                                  |
+
+Compression is detected rather than assumed, so a snapshot written with `compress: false` reads
+back the same way.
+
+---
+
+## `createSyncCode(length?)`
+
+A short, unambiguous code from [Crockford base32](https://www.crockford.com/base32.html). Defaults
+to eight characters; accepts 4 to 32.
+
+```ts
+createSyncCode() // "K7QP2M4X"
+createSyncCode(12) // 60 bits
+```
+
+## `normalizeSyncCode(input)`
+
+Turns what someone typed into the canonical code: uppercase, spaces and dashes dropped, `O` folded
+to zero and `I`/`L` to one. Throws `INVALID_SYNC_CODE` on anything outside the alphabet.
+
+```ts
+normalizeSyncCode('k7-qp2m4x') // "K7QP2M4X"
+```
+
+See [Sync codes](/docs/sync-codes).
 
 ---
 
@@ -41,6 +126,8 @@ Node `Readable` or web `ReadableStream`.
 | `contentDisposition` | `string`                 | —                                                                                 |
 | `metadata`           | `Record<string, string>` | —                                                                                 |
 | `acl`                | `ObjectCannedACL`        | — (most buckets block ACLs; prefer a bucket policy)                               |
+| `ifMatch`            | `string`                 | — write only if the stored ETag still matches                                     |
+| `ifAbsent`           | `boolean`                | — write only if nothing is stored yet                                             |
 | `signal`             | `AbortSignal`            | —                                                                                 |
 
 Returns:
@@ -64,21 +151,21 @@ user metadata so `get()` can hand it back later.
 
 ## `put(id, body, options?)`
 
-`upload(body, { key: id })`, with the identifier first because that reads better for the one file
-per identifier case. Same options minus `key`, same result.
+`upload(body, { key: id })`, with the identifier first because that reads better when one
+identifier owns one file. Same options minus `key`, same result.
 
 ```ts
 await bucket.put('XK5892', file)
 ```
 
-Writing to an id that already holds a file replaces it. See
-[One file per identifier](/docs/use-cases/file-per-id).
+Writing to an id that already holds a file replaces it.
 
 ---
 
 ## `get(key, options?)`
 
-Reads an object back. Returns `null` when the key does not exist.
+Reads a stored file back. Returns `null` when the key does not exist. For a snapshot use
+`getSnapshot()`, which unwraps the envelope for you.
 
 ```ts
 const file = await bucket.get('XK5892')

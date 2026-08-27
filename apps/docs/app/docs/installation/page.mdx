@@ -22,7 +22,8 @@ Node 20 or later — that is what AWS SDK v3 requires. `@aws-sdk/client-s3` and
 and no peer dependency to satisfy.
 
 The package ships ESM and CommonJS builds with TypeScript declarations for both, so `import` and
-`require` both work.
+`require` both work. It runs on your server only — there is no browser build, and no code path
+that would put credentials in front of a user.
 
 ## Credentials
 
@@ -80,3 +81,6 @@ The minimum policy for a bucket used by bucketcode:
 
 `getUrl()` needs no extra permission: presigning is a local computation over the credentials you
 already hold. The URL it produces grants exactly the `s3:GetObject` your own credentials have.
+
+Snapshots need nothing beyond these three. `putSnapshot()` is a `PutObject`, `getSnapshot()` is a
+`GetObject`, and the conditional writes ride along as headers on the same call.

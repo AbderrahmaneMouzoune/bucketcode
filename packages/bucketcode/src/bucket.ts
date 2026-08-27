@@ -13,12 +13,18 @@ import { createS3Client, resolveConfig } from './config.js'
 import { BucketCodeError } from './errors.js'
 import { assertValidKey, encodeKey, generateKey, joinKey, normalizePrefix, sanitizeFilename } from './key.js'
 import { DEFAULT_CONTENT_TYPE, lookupContentType } from './mime.js'
+import { decodeSnapshot, encodeSnapshot, ENVELOPE_VERSION } from './snapshot.js'
 import type {
   BucketConfig,
   GetOptions,
+  GetSnapshotOptions,
   GetUrlOptions,
   PutOptions,
+  PutSnapshotOptions,
   ResolvedConfig,
+  Snapshot,
+  SnapshotEnvelope,
+  SnapshotResult,
   StoredFile,
   UploadBody,
   UploadOptions,
@@ -32,6 +38,8 @@ const MAX_EXPIRES_IN = 604_800
 const DEFAULT_EXPIRES_IN = 3600
 /** User metadata must be US-ASCII, so the original filename is stored encoded. */
 const FILENAME_METADATA_KEY = 'filename'
+const SNAPSHOT_CONTENT_TYPE = 'application/json'
+const COMPRESSED_SNAPSHOT_CONTENT_TYPE = 'application/gzip'
 
 /** The AWS SDK adds these helpers to the body of a `GetObject` response. */
 type SdkStream = Readable & {
@@ -41,6 +49,27 @@ type SdkStream = Readable & {
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** S3 answers a failed IfMatch/IfNoneMatch with 412, or 409 under a race. */
+function isPreconditionFailure(error: unknown): boolean {
+  const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } }
+  const status = candidate?.$metadata?.httpStatusCode
+
+  return (
+    status === 412 ||
+    status === 409 ||
+    candidate?.name === 'PreconditionFailed' ||
+    candidate?.name === 'ConditionalRequestConflict'
+  )
+}
+
+/**
+ * S3 wants the quoted entity-tag form, while every ETag this package hands back
+ * has its quotes stripped. Accept either so `ifMatch: result.etag` just works.
+ */
+function quoteEtag(etag: string): string {
+  return /^(?:W\/)?".*"$/.test(etag) ? etag : `"${etag}"`
 }
 
 function isNotFound(error: unknown): boolean {
@@ -147,6 +176,8 @@ export class Bucket {
       ContentDisposition: options.contentDisposition,
       Metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       ACL: options.acl,
+      IfMatch: options.ifMatch ? quoteEtag(options.ifMatch) : undefined,
+      IfNoneMatch: options.ifAbsent ? '*' : undefined,
     })
 
     try {
@@ -162,6 +193,16 @@ export class Bucket {
         url: this.publicUrlFor(path),
       }
     } catch (error) {
+      if ((options.ifMatch != null || options.ifAbsent) && isPreconditionFailure(error)) {
+        throw new BucketCodeError(
+          'PRECONDITION_FAILED',
+          options.ifAbsent
+            ? `"${path}" already exists in bucket "${this.bucket}".`
+            : `"${path}" changed in bucket "${this.bucket}" since the ETag you passed as ifMatch. Read it again before writing.`,
+          { cause: error },
+        )
+      }
+
       throw new BucketCodeError(
         'UPLOAD_FAILED',
         `Failed to upload "${path}" to bucket "${this.bucket}": ${describe(error)}`,
@@ -179,6 +220,94 @@ export class Bucket {
   }
 
   /**
+   * Stores a snapshot of an application's local state — the shape a local-first
+   * app needs to move an IndexedDB database from one device to another.
+   *
+   * The value is wrapped in a self-describing envelope (app, schema version,
+   * device, timestamps), serialized as JSON and gzipped, so what lands in the
+   * bucket says what it is and what wrote it.
+   */
+  async putSnapshot(key: string, data: unknown, options: PutSnapshotOptions = {}): Promise<SnapshotResult> {
+    const createdAt = new Date()
+    const expiresAt = options.expiresIn != null ? new Date(createdAt.getTime() + options.expiresIn * 1000) : undefined
+
+    if (options.expiresIn != null && (!Number.isFinite(options.expiresIn) || options.expiresIn <= 0)) {
+      throw new BucketCodeError('INVALID_SNAPSHOT', '`expiresIn` must be a positive number of seconds.')
+    }
+
+    const compress = options.compress ?? true
+
+    const envelope: SnapshotEnvelope = {
+      bucketcode: ENVELOPE_VERSION,
+      app: options.app,
+      version: options.version,
+      device: options.device,
+      createdAt: createdAt.toISOString(),
+      expiresAt: expiresAt?.toISOString(),
+      data,
+    }
+
+    const result = await this.upload(encodeSnapshot(envelope, compress), {
+      key,
+      prefix: options.prefix,
+      contentType: compress ? COMPRESSED_SNAPSHOT_CONTENT_TYPE : SNAPSHOT_CONTENT_TYPE,
+      cacheControl: 'private, no-store',
+      ifMatch: options.ifMatch,
+      ifAbsent: options.ifAbsent,
+      signal: options.signal,
+    })
+
+    return {
+      bucket: result.bucket,
+      key: result.key,
+      path: result.path,
+      etag: result.etag,
+      size: result.size,
+      compressed: compress,
+      createdAt,
+      expiresAt,
+    }
+  }
+
+  /**
+   * Reads a snapshot back, or `null` when there is none — including one that
+   * has passed its `expiresAt`, which is never handed over even if the object
+   * is still sitting in the bucket.
+   */
+  async getSnapshot<T = unknown>(key: string, options: GetSnapshotOptions = {}): Promise<Snapshot<T> | null> {
+    const file = await this.get(key, { prefix: options.prefix, signal: options.signal })
+    if (!file) return null
+
+    const envelope = decodeSnapshot(await file.bytes())
+    const expiresAt = envelope.expiresAt ? new Date(envelope.expiresAt) : undefined
+
+    if (expiresAt && expiresAt.getTime() <= Date.now()) {
+      return null
+    }
+
+    if (options.maxVersion != null && envelope.version != null && envelope.version > options.maxVersion) {
+      throw new BucketCodeError(
+        'SNAPSHOT_TOO_NEW',
+        `Snapshot is at schema version ${envelope.version}, but this device only understands ${options.maxVersion}. Update the application before restoring.`,
+      )
+    }
+
+    return {
+      bucket: file.bucket,
+      key: file.key,
+      path: file.path,
+      data: envelope.data as T,
+      app: envelope.app,
+      version: envelope.version,
+      device: envelope.device,
+      createdAt: new Date(envelope.createdAt),
+      expiresAt,
+      etag: file.etag,
+      size: file.size,
+    }
+  }
+
+  /**
    * Reads an object back: its bytes and everything S3 knows about it.
    * Returns `null` when the key does not exist, so a missing file is a value to
    * branch on rather than an exception to catch.
@@ -187,7 +316,7 @@ export class Bucket {
    * or `text()`, exactly one of them.
    */
   async get(key: string, options: GetOptions = {}): Promise<StoredFile | null> {
-    const path = this.resolvePath(key)
+    const path = this.resolvePath(key, options.prefix)
 
     let response
     try {

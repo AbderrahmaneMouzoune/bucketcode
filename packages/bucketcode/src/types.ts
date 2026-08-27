@@ -77,6 +77,14 @@ export interface UploadOptions {
   metadata?: Record<string, string>
   /** Canned ACL. Most modern buckets block ACLs — prefer a bucket policy. */
   acl?: ObjectCannedACL
+  /**
+   * Only write if the object still carries this ETag. Optimistic concurrency:
+   * a second device that wrote in the meantime makes this fail rather than
+   * silently overwriting.
+   */
+  ifMatch?: string
+  /** Only write if nothing is stored under the key yet. */
+  ifAbsent?: boolean
   signal?: AbortSignal
 }
 
@@ -102,6 +110,8 @@ export interface UploadResult {
 }
 
 export interface GetOptions {
+  /** Prefix for this read only. Overrides the bucket-level `prefix`. */
+  prefix?: string
   signal?: AbortSignal
 }
 
@@ -141,4 +151,81 @@ export interface GetUrlOptions {
    * filename. Signed URLs only.
    */
   download?: boolean | string
+}
+
+/**
+ * What actually lands in the bucket. Self-describing on purpose: a device that
+ * restores a snapshot can tell what wrote it, when, and for which schema.
+ */
+export interface SnapshotEnvelope {
+  /** Envelope format version — bucketcode's, not your data's. */
+  bucketcode: number
+  /** Your application's name, when you pass one. */
+  app?: string
+  /** Your schema version, so a restore can refuse data it cannot read. */
+  version?: number
+  /** Free label for the device that wrote it, e.g. "Pixel 8". */
+  device?: string
+  createdAt: string
+  expiresAt?: string
+  data: unknown
+}
+
+export interface PutSnapshotOptions {
+  app?: string
+  version?: number
+  device?: string
+  /**
+   * Lifetime in seconds. After it, `getSnapshot()` reports the snapshot as
+   * gone. The object itself is removed by an S3 lifecycle rule, not by
+   * bucketcode. Omit for a snapshot that does not expire.
+   */
+  expiresIn?: number
+  /** gzip before uploading. Defaults to `true` — snapshots are repetitive JSON. */
+  compress?: boolean
+  /** Only write if the stored snapshot still carries this ETag. */
+  ifMatch?: string
+  /** Only write if nothing is stored under the key yet. */
+  ifAbsent?: boolean
+  prefix?: string
+  signal?: AbortSignal
+}
+
+export interface SnapshotResult {
+  bucket: string
+  key: string
+  path: string
+  etag?: string
+  /** Size of what was stored, after compression. */
+  size?: number
+  compressed: boolean
+  createdAt: Date
+  expiresAt?: Date
+}
+
+export interface GetSnapshotOptions {
+  /**
+   * The newest schema version this device understands. A snapshot written by a
+   * newer build throws `SNAPSHOT_TOO_NEW` instead of being handed over half
+   * understood.
+   */
+  maxVersion?: number
+  prefix?: string
+  signal?: AbortSignal
+}
+
+export interface Snapshot<T = unknown> {
+  bucket: string
+  key: string
+  path: string
+  data: T
+  app?: string
+  version?: number
+  device?: string
+  createdAt: Date
+  expiresAt?: Date
+  /** Pass it back as `ifMatch` on the next write to detect a concurrent one. */
+  etag?: string
+  /** Stored size, after compression. */
+  size?: number
 }

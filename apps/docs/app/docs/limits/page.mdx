@@ -1,12 +1,12 @@
 export const metadata = {
-  title: 'Size limits and streams',
-  description: 'The payload transits through your server. Here is what that costs and how to work with it.',
+  title: 'How big can a snapshot be',
+  description: 'A snapshot goes through your server, so your runtime sets the ceiling.',
 }
 
-# Size limits and streams
+# How big can a snapshot be
 
-`upload()` sends the bytes from your server to S3 in a single `PutObject` request. The file
-therefore transits through your runtime, and your runtime caps how large a request it accepts.
+A snapshot travels from the browser to your API, and only then to S3. Your runtime's request limit
+is therefore the ceiling:
 
 | Runtime                                                    | Max request body                  |
 | ---------------------------------------------------------- | --------------------------------- |
@@ -16,69 +16,84 @@ therefore transits through your runtime, and your runtime caps how large a reque
 | Next.js Pages Router API routes (`bodyParser`)             | **1 MB** by default, configurable |
 | Long-running Node server (Express, Fastify, Docker…)       | whatever you configure            |
 
-Below those limits — avatars, documents, images, CSV exports — a single `PutObject` is the
-simplest thing that works, and it keeps your credentials on the server. Above them, it is the
-wrong tool.
+That is the compressed size, and compression is doing a lot of work here.
 
-## Failing early instead of late
+## What gzip buys you
 
-Set `maxSize` below your runtime's limit. bucketcode checks it before sending anything, so you
-answer 413 instead of having the platform truncate the request:
+An IndexedDB dump is the same keys repeated over every record, which is the best case for gzip.
+In practice a dump compresses 5–10×, so a 4.5 MB limit accommodates something like 20–45 MB of
+raw JSON — tens of thousands of ordinary records. Most local-first apps never come close.
+
+Measure yours rather than guessing:
+
+```ts
+const result = await bucket.putSnapshot(code, state)
+
+console.log(result.size) // bytes actually stored
+```
+
+## Failing early
+
+Set `maxSize` below your platform's limit. bucketcode checks it before sending anything, so an
+oversized snapshot costs a comparison instead of a truncated request:
 
 ```ts
 const bucket = createBucket({
-  bucket: 'my-bucket',
+  bucket: process.env.S3_BUCKET,
   maxSize: 4 * 1024 * 1024, // under Vercel's 4.5 MB
 })
+```
 
+```ts
 try {
-  await bucket.upload(file)
+  await bucket.putSnapshot(code, state)
 } catch (error) {
   if (isBucketCodeError(error) && error.code === 'FILE_TOO_LARGE') {
-    return Response.json({ error: 'File too large' }, { status: 413 })
+    return Response.json({ error: 'This database is too large to transfer in one piece' }, { status: 413 })
   }
 
   throw error
 }
 ```
 
-Validate on the client too, for the error message — but never _only_ on the client.
+## When you outgrow it
 
-## Streams
-
-`upload()` accepts a Node `Readable` or a web `ReadableStream`, which lets a long-running server
-pipe a request body straight to S3 without buffering it:
-
-```ts
-app.put('/files/:name', async (request, response) => {
-  const result = await bucket.upload(request, {
-    filename: request.params.name,
-    contentLength: Number(request.headers['content-length']),
-    contentType: request.headers['content-type'],
-  })
-
-  response.json(result)
-})
-```
-
-`contentLength` is required for a stream. A single `PutObject` request cannot use chunked
-encoding, so S3 needs the size upfront. Without it, `upload()` throws `MISSING_CONTENT_LENGTH`
-immediately rather than failing deep inside the AWS SDK:
+**Split by object store.** One snapshot per store, under keys derived from the same code, plus a
+small manifest. Each piece stays small, a failed piece is cheap to retry, and the receiving device
+can show real progress:
 
 ```ts
-await bucket.upload(stream, { key: 'video.mp4' })
-// BucketCodeError: Uploading a stream requires an explicit `contentLength` (in bytes)…
+await bucket.putSnapshot(`${code}/manifest`, { stores: ['notes', 'attachments'], version: SCHEMA_VERSION })
+await bucket.putSnapshot(`${code}/notes`, notes)
+await bucket.putSnapshot(`${code}/attachments`, attachments)
 ```
 
-Streams are part of the signature from v0.1 on purpose. When multipart upload lands in v0.2,
-`contentLength` becomes optional and nothing else changes — no breaking change to your call sites.
+**Leave the attachments out of the JSON.** Base64 inside a snapshot inflates binary by a third and
+defeats gzip. Store blobs as objects and reference them by key — see
+[attachments beside the data](/docs/use-cases/attachments).
 
-## What v0.2 adds
+**Presign the upload.** For a genuinely large database, have the browser talk to S3 directly so
+the bytes never touch your runtime. That needs CORS on the bucket, which is the thing bucketcode
+otherwise saves you from — worth it above a certain size, not before. Today you build it over
+`bucket.client`; v0.2 makes it first-class, along with multipart.
 
-- **Multipart upload**, so large files stream in chunks and `contentLength` stops being required.
-- **Presigned PUT/POST**, so the browser uploads straight to S3 and the payload never touches your
-  runtime — which is the real answer to the table above.
+## Storage cost
 
-Until then, if you already need multi-gigabyte uploads, presign the request yourself with
-`@aws-sdk/s3-request-presigner` over `bucket.client`, or use `@aws-sdk/lib-storage`. bucketcode
-does not stand in the way.
+Snapshots are small and S3 is cheap, but a transfer snapshot that nobody deletes is a bill that
+only grows. Put a lifecycle rule on the prefix and stop thinking about it:
+
+```jsonc
+{
+  "Rules": [
+    {
+      "ID": "expire-transfer-snapshots",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "snapshots/" },
+      "Expiration": { "Days": 1 },
+    },
+  ],
+}
+```
+
+Per-account backups want a different rule, or none — keep them under their own prefix so the two
+policies do not collide.

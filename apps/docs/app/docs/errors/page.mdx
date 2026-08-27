@@ -12,7 +12,7 @@ underlying error in `cause`:
 import { isBucketCodeError } from 'bucketcode'
 
 try {
-  await bucket.upload(file)
+  await bucket.putSnapshot(code, state)
 } catch (error) {
   if (isBucketCodeError(error)) {
     console.error(error.code, error.message, error.cause)
@@ -24,40 +24,59 @@ try {
 
 ## Codes
 
-| Code                     | When                                                                                             |
-| ------------------------ | ------------------------------------------------------------------------------------------------ |
-| `INVALID_CONFIG`         | Missing bucket, `publicUrl` that is not an absolute URL, non-positive `maxSize`.                 |
-| `INVALID_KEY`            | Empty key, leading or trailing `/`, `..` segment, backslash, control character, over 1024 bytes. |
-| `INVALID_BODY`           | The upload body is not a supported type.                                                         |
-| `MISSING_CONTENT_LENGTH` | A stream was uploaded without `contentLength`.                                                   |
-| `FILE_TOO_LARGE`         | The body is above the configured `maxSize`.                                                      |
-| `UPLOAD_FAILED`          | `PutObject` was rejected. Original error in `cause`.                                             |
-| `GET_FAILED`             | `GetObject` failed for a reason other than a missing key, or answered without a body.            |
-| `DELETE_FAILED`          | `DeleteObject`/`DeleteObjects` was rejected, or S3 reported per-key errors.                      |
-| `URL_FAILED`             | Invalid `expiresIn`, signing failure, or a public URL requested with no `publicUrl` configured.  |
+| Code                     | When                                                                                                                       |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `INVALID_CONFIG`         | Missing bucket, `publicUrl` that is not an absolute URL, non-positive `maxSize`.                                           |
+| `INVALID_SYNC_CODE`      | The code is empty, or holds characters outside the alphabet.                                                               |
+| `INVALID_SNAPSHOT`       | Data JSON cannot represent, a stored object that is not a snapshot, an unreadable one, or an envelope from a newer format. |
+| `SNAPSHOT_TOO_NEW`       | The snapshot's schema version is above the `maxVersion` you passed.                                                        |
+| `PRECONDITION_FAILED`    | An `ifMatch` or `ifAbsent` write lost the race.                                                                            |
+| `INVALID_KEY`            | Empty key, leading or trailing `/`, `..` segment, backslash, control character, over 1024 bytes.                           |
+| `INVALID_BODY`           | The upload body is not a supported type.                                                                                   |
+| `MISSING_CONTENT_LENGTH` | A stream was uploaded without `contentLength`.                                                                             |
+| `FILE_TOO_LARGE`         | The body is above the configured `maxSize`.                                                                                |
+| `UPLOAD_FAILED`          | `PutObject` was rejected. Original error in `cause`.                                                                       |
+| `GET_FAILED`             | `GetObject` failed for a reason other than a missing key, or answered without a body.                                      |
+| `DELETE_FAILED`          | `DeleteObject`/`DeleteObjects` was rejected, or S3 reported per-key errors.                                                |
+| `URL_FAILED`             | Invalid `expiresIn`, signing failure, or a public URL requested with no `publicUrl` configured.                            |
 
 ## Failures that never reach the network
 
-`INVALID_CONFIG`, `INVALID_KEY`, `INVALID_BODY`, `MISSING_CONTENT_LENGTH` and `FILE_TOO_LARGE` are
-all raised before a single byte leaves your server. A user posting a 200 MB file to an endpoint
-capped at 4 MB costs you a size comparison, not an upload.
+`INVALID_CONFIG`, `INVALID_SYNC_CODE`, `INVALID_KEY`, `INVALID_BODY`, `MISSING_CONTENT_LENGTH`,
+`FILE_TOO_LARGE`, and an `INVALID_SNAPSHOT` caused by unserializable data are all raised before a
+single byte leaves your server. A user pasting nonsense into the code field, or a 200 MB database
+posted to an endpoint capped at 4 MB, costs you a comparison rather than a request.
 
-## A missing file is not an error
+## A missing snapshot is not an error
 
-`get()` returns `null` rather than throwing when the key does not exist:
+`getSnapshot()` returns `null` for a code that was never used _and_ for one that has expired. Both
+mean the same thing to the person typing it, so there is nothing to tell apart:
 
 ```ts
-const stored = await bucket.get(id)
+const snapshot = await bucket.getSnapshot(code)
 
-if (!stored) {
-  return new Response('Not found', { status: 404 })
+if (!snapshot) {
+  return Response.json({ error: 'Unknown or expired code' }, { status: 404 })
 }
 ```
 
-`delete()` follows S3's own semantics: deleting a key that is not there succeeds quietly.
+`delete()` follows S3's own semantics: deleting something that is not there succeeds quietly,
+which is what makes a retry after a partial failure converge.
 
-`GET_FAILED` is therefore a real problem — denied permissions, a network failure, a bucket that
-does not exist — and deserves to propagate.
+## The three that are decisions, not bugs
+
+Most codes mean something is wrong. These three are the system telling you something true, and
+what you do with them is a product choice:
+
+**`PRECONDITION_FAILED`** — another device wrote first. Retry the read-merge-write loop, ask the
+user, or refuse. See [two devices, one snapshot](/docs/two-devices).
+
+**`SNAPSHOT_TOO_NEW`** — the snapshot came from a build ahead of this one. The only safe answer is
+to stop and tell the user to update the app; importing anyway silently drops the fields this build
+does not know about.
+
+**`INVALID_SYNC_CODE`** — the typed code cannot exist. Better feedback than a lookup that finds
+nothing, and it costs no request.
 
 ## Mapping to HTTP
 
@@ -68,7 +87,11 @@ const STATUS: Record<string, number> = {
   FILE_TOO_LARGE: 413,
   INVALID_BODY: 400,
   INVALID_KEY: 400,
+  INVALID_SNAPSHOT: 400,
+  INVALID_SYNC_CODE: 400,
   MISSING_CONTENT_LENGTH: 411,
+  PRECONDITION_FAILED: 409,
+  SNAPSHOT_TOO_NEW: 409,
 }
 
 export function statusFor(error: unknown): number {
@@ -76,5 +99,5 @@ export function statusFor(error: unknown): number {
 }
 ```
 
-Keep `UPLOAD_FAILED`, `GET_FAILED`, `DELETE_FAILED` and `INVALID_CONFIG` on 500: they mean
-something on your side is wrong, and they belong in your logs with `cause` attached.
+Keep `UPLOAD_FAILED`, `GET_FAILED`, `DELETE_FAILED`, `URL_FAILED` and `INVALID_CONFIG` on 500:
+they mean something on your side is wrong, and they belong in your logs with `cause` attached.

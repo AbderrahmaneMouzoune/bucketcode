@@ -3,17 +3,17 @@ import { codeToHtml } from 'shiki'
 
 import { navigation } from '@/lib/navigation'
 
-const SAMPLE = `import { nanoid } from 'nanoid'
-import { createBucket } from 'bucketcode'
+const SAMPLE = `import { createBucket, createSyncCode, normalizeSyncCode } from 'bucketcode'
 
-const bucket = createBucket({ bucket: 'my-bucket', prefix: 'files' })
-const id = nanoid(6) // "XK5892"
+const bucket = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
 
-await bucket.put(id, file)        // create
-await bucket.put(id, newVersion)  // replace, same id
+// On the old device: hand the user a code.
+const code = createSyncCode() // "K7QP2M4X"
+await bucket.putSnapshot(code, state, { app: 'notes', version: 3, expiresIn: 3600 })
 
-const stored = await bucket.get(id)
-stored?.filename // "rapport.pdf"`
+// On the new device: they type it in.
+const snapshot = await bucket.getSnapshot(normalizeSyncCode(typed), { maxVersion: 3 })
+snapshot?.data // → the state, ready to write back into IndexedDB`
 
 export default async function HomePage() {
   const highlighted = await codeToHtml(SAMPLE, {
@@ -26,18 +26,18 @@ export default async function HomePage() {
   return (
     <>
       <section className="hero">
-        <h1>Server-side S3 uploads, without the ceremony.</h1>
+        <h1>Your local-first app, on their other device.</h1>
         <p>
-          Five methods, all running on your server. Credentials never reach the browser, so there is no CORS to
-          configure and nothing to sign client-side.
+          IndexedDB never leaves the browser it was written in. bucketcode snapshots that state into a bucket you
+          control, under a code the user carries across. Credentials stay on your server.
         </p>
 
         <div className="hero-actions">
           <Link className="button button-primary" href="/docs/quick-start">
             Quick start
           </Link>
-          <Link className="button" href="/docs/api">
-            API reference
+          <Link className="button" href="/docs/snapshots">
+            How snapshots work
           </Link>
           <a className="button" href="https://github.com/AbderrahmaneMouzoune/bucketcode">
             GitHub
