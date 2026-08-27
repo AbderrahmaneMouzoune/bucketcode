@@ -1,72 +1,40 @@
 {
-  "name": "bucketcode",
-  "version": "0.1.0",
-  "description": "Server-side S3 uploads and downloads: upload, put, get, getUrl, delete. Works with AWS S3, Cloudflare R2, MinIO and any S3-compatible storage.",
-  "keywords": [
-    "s3",
-    "upload",
-    "aws",
-    "r2",
-    "minio",
-    "storage",
-    "bucket",
-    "presigned-url",
-    "nextjs",
-    "typescript"
-  ],
-  "license": "MIT",
-  "author": "Abderrahmane Mouzoune",
-  "homepage": "https://github.com/AbderrahmaneMouzoune/bucketcode#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/AbderrahmaneMouzoune/bucketcode.git"
-  },
-  "bugs": {
-    "url": "https://github.com/AbderrahmaneMouzoune/bucketcode/issues"
-  },
+  "name": "bucketcode-monorepo",
+  "private": true,
   "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
-    },
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
-  "sideEffects": false,
+  "packageManager": "pnpm@10.33.0",
   "engines": {
-    "node": ">=20"
-  },
-  "publishConfig": {
-    "access": "public"
+    "node": ">=20",
+    "pnpm": ">=10"
   },
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
-  },
-  "dependencies": {
-    "@aws-sdk/client-s3": "^3.700.0",
-    "@aws-sdk/s3-request-presigner": "^3.700.0"
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "test": "turbo test",
+    "type-check": "turbo type-check",
+    "lint": "turbo lint",
+    "lint:fix": "turbo lint:fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
-    "tsup": "^8.5.1",
+    "@eslint/js": "^9.18.0",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^10.0.1",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
     "typescript": "^5.7.2",
-    "vitest": "^4.1.11"
+    "typescript-eslint": "^8.20.0"
   },
-  "overrides": {
-    "esbuild": "^0.28.2"
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@tailwindcss/oxide",
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ],
+    "overrides": {
+      "esbuild": "^0.28.2"
+    }
   }
 }

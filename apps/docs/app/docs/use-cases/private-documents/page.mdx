@@ -1,0 +1,102 @@
+export const metadata = {
+  title: 'Private documents',
+  description: 'Invoices and contracts behind a permission check and a short-lived URL.',
+}
+
+# Private documents
+
+Invoices, contracts, medical records: the bucket is private, nothing is ever public, and every
+read goes through a permission check. bucketcode's default already fits — with no `publicUrl`
+configured, `getUrl()` signs.
+
+```ts
+import { createBucket } from 'bucketcode'
+
+export const documents = createBucket({
+  bucket: process.env.S3_BUCKET,
+  prefix: 'documents',
+  // No publicUrl: getUrl() returns a presigned URL, upload() leaves `url` undefined.
+})
+```
+
+## Storing
+
+```ts
+const result = await documents.put(invoice.id, pdf, {
+  contentType: 'application/pdf',
+  filename: `invoice-${invoice.number}.pdf`,
+  metadata: { organizationId: invoice.organizationId },
+})
+```
+
+The `metadata` you attach travels with the object and comes back from `get()`. It is useful as a
+cross-check — but it is not an access control mechanism. Authorization belongs in your database,
+where you can query it.
+
+## Serving
+
+```ts
+// app/api/invoices/[id]/download/route.ts
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const session = await auth()
+
+  if (!session) return new Response('Unauthorized', { status: 401 })
+
+  const invoice = await db.invoice.findUnique({ where: { id } })
+
+  if (!invoice || invoice.organizationId !== session.organizationId) {
+    // 404, not 403: a 403 confirms the invoice exists.
+    return new Response('Not found', { status: 404 })
+  }
+
+  const url = await documents.getUrl(id, {
+    expiresIn: 60,
+    download: `invoice-${invoice.number}.pdf`,
+  })
+
+  return Response.redirect(url)
+}
+```
+
+Three things are doing work here:
+
+- **The check happens before the URL exists.** A presigned URL is a bearer token: anyone holding
+  it can read the object until it expires. Only mint one after you know the caller is allowed.
+- **`expiresIn: 60`.** Long enough for the browser to follow the redirect, short enough that a URL
+  leaked into a log or a Referer header is worthless by the time anyone finds it.
+- **`download`.** Sets `Content-Disposition: attachment` with a clean filename, so the browser
+  saves `invoice-2026-001.pdf` rather than rendering a PDF named after an opaque id.
+
+## When not to redirect
+
+A redirect hands the object to the browser directly, which is cheap and fast. Stream through your
+server instead when you need to log the access as part of the same request, or when a leaked URL
+is unacceptable even for sixty seconds:
+
+```ts
+import { Readable } from 'node:stream'
+
+const file = await documents.get(id)
+
+if (!file) return new Response('Not found', { status: 404 })
+
+await db.accessLog.create({ data: { invoiceId: id, userId: session.userId } })
+
+return new Response(Readable.toWeb(file.body) as ReadableStream, {
+  headers: {
+    'Content-Type': file.contentType,
+    'Content-Disposition': `attachment; filename="invoice-${invoice.number}.pdf"`,
+    'Cache-Control': 'private, no-store',
+  },
+})
+```
+
+`no-store` matters here: without it, a shared or proxy cache may keep a document that was meant
+for one person.
+
+## Retention
+
+bucketcode deletes what you tell it to and nothing else. For "delete every invoice older than ten
+years", use an S3 lifecycle rule on the prefix — it runs server-side, costs nothing, and keeps
+working when your application is not.

@@ -1,0 +1,84 @@
+export const metadata = {
+  title: 'Size limits and streams',
+  description: 'The payload transits through your server. Here is what that costs and how to work with it.',
+}
+
+# Size limits and streams
+
+`upload()` sends the bytes from your server to S3 in a single `PutObject` request. The file
+therefore transits through your runtime, and your runtime caps how large a request it accepts.
+
+| Runtime                                                    | Max request body                  |
+| ---------------------------------------------------------- | --------------------------------- |
+| AWS Lambda (synchronous invoke, API Gateway, function URL) | **6 MB**                          |
+| Vercel Serverless Functions                                | **4.5 MB**                        |
+| Netlify Functions                                          | **6 MB**                          |
+| Next.js Pages Router API routes (`bodyParser`)             | **1 MB** by default, configurable |
+| Long-running Node server (Express, Fastify, Docker…)       | whatever you configure            |
+
+Below those limits — avatars, documents, images, CSV exports — a single `PutObject` is the
+simplest thing that works, and it keeps your credentials on the server. Above them, it is the
+wrong tool.
+
+## Failing early instead of late
+
+Set `maxSize` below your runtime's limit. bucketcode checks it before sending anything, so you
+answer 413 instead of having the platform truncate the request:
+
+```ts
+const bucket = createBucket({
+  bucket: 'my-bucket',
+  maxSize: 4 * 1024 * 1024, // under Vercel's 4.5 MB
+})
+
+try {
+  await bucket.upload(file)
+} catch (error) {
+  if (isBucketCodeError(error) && error.code === 'FILE_TOO_LARGE') {
+    return Response.json({ error: 'File too large' }, { status: 413 })
+  }
+
+  throw error
+}
+```
+
+Validate on the client too, for the error message — but never _only_ on the client.
+
+## Streams
+
+`upload()` accepts a Node `Readable` or a web `ReadableStream`, which lets a long-running server
+pipe a request body straight to S3 without buffering it:
+
+```ts
+app.put('/files/:name', async (request, response) => {
+  const result = await bucket.upload(request, {
+    filename: request.params.name,
+    contentLength: Number(request.headers['content-length']),
+    contentType: request.headers['content-type'],
+  })
+
+  response.json(result)
+})
+```
+
+`contentLength` is required for a stream. A single `PutObject` request cannot use chunked
+encoding, so S3 needs the size upfront. Without it, `upload()` throws `MISSING_CONTENT_LENGTH`
+immediately rather than failing deep inside the AWS SDK:
+
+```ts
+await bucket.upload(stream, { key: 'video.mp4' })
+// BucketCodeError: Uploading a stream requires an explicit `contentLength` (in bytes)…
+```
+
+Streams are part of the signature from v0.1 on purpose. When multipart upload lands in v0.2,
+`contentLength` becomes optional and nothing else changes — no breaking change to your call sites.
+
+## What v0.2 adds
+
+- **Multipart upload**, so large files stream in chunks and `contentLength` stops being required.
+- **Presigned PUT/POST**, so the browser uploads straight to S3 and the payload never touches your
+  runtime — which is the real answer to the table above.
+
+Until then, if you already need multi-gigabyte uploads, presign the request yourself with
+`@aws-sdk/s3-request-presigner` over `bucket.client`, or use `@aws-sdk/lib-storage`. bucketcode
+does not stand in the way.

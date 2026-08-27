@@ -1,0 +1,113 @@
+export const metadata = {
+  title: 'Configuration',
+  description: 'Every option createBucket accepts, and the environment variable behind it.',
+}
+
+# Configuration
+
+```ts
+createBucket({
+  bucket: 'my-bucket', // required (or BUCKETCODE_BUCKET / S3_BUCKET)
+  region: 'eu-west-3', // or BUCKETCODE_REGION / AWS_REGION / AWS_DEFAULT_REGION
+  credentials: {
+    // omit to use the AWS default provider chain
+    accessKeyId: '…',
+    secretAccessKey: '…',
+    sessionToken: '…', // optional
+  },
+  endpoint: 'https://…', // S3-compatible storage — or BUCKETCODE_ENDPOINT / S3_ENDPOINT
+  forcePathStyle: true, // defaults to true when `endpoint` is set
+  publicUrl: 'https://cdn…', // public bucket or CDN — or BUCKETCODE_PUBLIC_URL / S3_PUBLIC_URL
+  prefix: 'uploads', // internal namespace, applied on the way in and out
+  maxSize: 5 * 1024 * 1024, // reject bigger uploads before any network call
+  client: myS3Client, // bring your own S3Client
+})
+```
+
+## Options
+
+| Option           | Environment fallback                                    | Notes                                                           |
+| ---------------- | ------------------------------------------------------- | --------------------------------------------------------------- |
+| `bucket`         | `BUCKETCODE_BUCKET`, `S3_BUCKET`                        | The only required option.                                       |
+| `region`         | `BUCKETCODE_REGION`, `AWS_REGION`, `AWS_DEFAULT_REGION` | Defaults to `"auto"` when an `endpoint` is set.                 |
+| `credentials`    | —                                                       | Omit for the AWS default provider chain.                        |
+| `endpoint`       | `BUCKETCODE_ENDPOINT`, `S3_ENDPOINT`                    | For R2, MinIO, Scaleway, Wasabi…                                |
+| `forcePathStyle` | —                                                       | Defaults to `true` with a custom `endpoint`, `false` otherwise. |
+| `publicUrl`      | `BUCKETCODE_PUBLIC_URL`, `S3_PUBLIC_URL`                | Must be an absolute URL. Trailing slash optional.               |
+| `prefix`         | —                                                       | Applied by every method.                                        |
+| `maxSize`        | —                                                       | In bytes. Enforced before any network call.                     |
+| `client`         | —                                                       | An `S3Client` you built yourself.                               |
+
+## The prefix is a namespace, not part of the key
+
+The prefix is applied on the way in and stripped on the way out, so the identifier you store in
+your database is the one you hand back to every method:
+
+```ts
+const bucket = createBucket({ bucket: 'my-bucket', prefix: 'files' })
+
+const result = await bucket.put('XK5892', file)
+
+result.key // "XK5892"       — the handle you store and reuse
+result.path // "files/XK5892" — the real object key, for the AWS console
+
+await bucket.get('XK5892') // reads files/XK5892
+await bucket.delete('XK5892') // deletes files/XK5892
+```
+
+`upload()` also takes a per-call `prefix` that overrides the bucket-level one, which is how you
+partition by tenant:
+
+```ts
+await bucket.upload(file, { prefix: `tenant-${tenantId}` })
+```
+
+## Public URLs
+
+Set `publicUrl` when the bucket is served publicly or sits behind a CDN. Two things change:
+
+- `upload()` returns a ready-to-use `url` in its result.
+- `getUrl()` returns the public URL instead of a presigned one, unless you pass `signed: true`.
+
+```ts
+const bucket = createBucket({ bucket: 'my-bucket', publicUrl: 'https://cdn.example.com' })
+
+await bucket.getUrl('avatars/42.png')
+// → "https://cdn.example.com/avatars/42.png"
+
+await bucket.getUrl('avatars/42.png', { signed: true, expiresIn: 60 })
+// → a presigned URL, even though publicUrl is set
+```
+
+Without `publicUrl`, `upload()` leaves `url` undefined on purpose. A URL that answers 403 is worse
+than no URL at all.
+
+## Size caps
+
+`maxSize` is checked against the body size before anything is sent, so an oversized upload costs
+you nothing:
+
+```ts
+const bucket = createBucket({ bucket: 'my-bucket', maxSize: 4 * 1024 * 1024 })
+
+await bucket.upload(tooBig) // throws BucketCodeError { code: 'FILE_TOO_LARGE' }
+```
+
+Set it below your runtime's own request limit and you get a clean 413 instead of a truncated
+request. See [Size limits and streams](/docs/limits).
+
+## Bringing your own client
+
+`client` takes over completely — region, credentials, endpoint and retry strategy all come from
+it:
+
+```ts
+import { S3Client } from '@aws-sdk/client-s3'
+
+const bucket = createBucket({
+  bucket: 'my-bucket',
+  client: new S3Client({ region: 'eu-west-3', maxAttempts: 5 }),
+})
+```
+
+A client you passed in is yours to close: `bucket.destroy()` leaves it alone.

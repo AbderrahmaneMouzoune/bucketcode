@@ -6,14 +6,7 @@ import type { Readable } from 'node:stream'
  * so adding multipart support later is not a breaking change — see the
  * `contentLength` note in `UploadOptions`.
  */
-export type UploadBody =
-  | string
-  | Uint8Array
-  | ArrayBuffer
-  | ArrayBufferView
-  | Blob
-  | Readable
-  | ReadableStream
+export type UploadBody = string | Uint8Array | ArrayBuffer | ArrayBufferView | Blob | Readable | ReadableStream
 
 export interface BucketCredentials {
   accessKeyId: string

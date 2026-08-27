@@ -191,10 +191,9 @@ export class Bucket {
 
     let response
     try {
-      response = await this.client.send(
-        new GetObjectCommand({ Bucket: this.bucket, Key: path }),
-        { abortSignal: options.signal },
-      )
+      response = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: path }), {
+        abortSignal: options.signal,
+      })
     } catch (error) {
       if (isNotFound(error)) return null
 
@@ -264,7 +263,9 @@ export class Bucket {
     try {
       return await getSignedUrl(this.client, command, { expiresIn })
     } catch (error) {
-      throw new BucketCodeError('URL_FAILED', `Failed to sign a URL for "${path}": ${describe(error)}`, { cause: error })
+      throw new BucketCodeError('URL_FAILED', `Failed to sign a URL for "${path}": ${describe(error)}`, {
+        cause: error,
+      })
     }
   }
 

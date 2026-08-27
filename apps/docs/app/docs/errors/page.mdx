@@ -1,0 +1,80 @@
+export const metadata = {
+  title: 'Errors',
+  description: 'Every failure is a BucketCodeError with a stable code.',
+}
+
+# Errors
+
+Everything bucketcode throws is a `BucketCodeError` carrying a `code` you can branch on, and the
+underlying error in `cause`:
+
+```ts
+import { isBucketCodeError } from 'bucketcode'
+
+try {
+  await bucket.upload(file)
+} catch (error) {
+  if (isBucketCodeError(error)) {
+    console.error(error.code, error.message, error.cause)
+  }
+
+  throw error
+}
+```
+
+## Codes
+
+| Code                     | When                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------ |
+| `INVALID_CONFIG`         | Missing bucket, `publicUrl` that is not an absolute URL, non-positive `maxSize`.                 |
+| `INVALID_KEY`            | Empty key, leading or trailing `/`, `..` segment, backslash, control character, over 1024 bytes. |
+| `INVALID_BODY`           | The upload body is not a supported type.                                                         |
+| `MISSING_CONTENT_LENGTH` | A stream was uploaded without `contentLength`.                                                   |
+| `FILE_TOO_LARGE`         | The body is above the configured `maxSize`.                                                      |
+| `UPLOAD_FAILED`          | `PutObject` was rejected. Original error in `cause`.                                             |
+| `GET_FAILED`             | `GetObject` failed for a reason other than a missing key, or answered without a body.            |
+| `DELETE_FAILED`          | `DeleteObject`/`DeleteObjects` was rejected, or S3 reported per-key errors.                      |
+| `URL_FAILED`             | Invalid `expiresIn`, signing failure, or a public URL requested with no `publicUrl` configured.  |
+
+## Failures that never reach the network
+
+`INVALID_CONFIG`, `INVALID_KEY`, `INVALID_BODY`, `MISSING_CONTENT_LENGTH` and `FILE_TOO_LARGE` are
+all raised before a single byte leaves your server. A user posting a 200 MB file to an endpoint
+capped at 4 MB costs you a size comparison, not an upload.
+
+## A missing file is not an error
+
+`get()` returns `null` rather than throwing when the key does not exist:
+
+```ts
+const stored = await bucket.get(id)
+
+if (!stored) {
+  return new Response('Not found', { status: 404 })
+}
+```
+
+`delete()` follows S3's own semantics: deleting a key that is not there succeeds quietly.
+
+`GET_FAILED` is therefore a real problem — denied permissions, a network failure, a bucket that
+does not exist — and deserves to propagate.
+
+## Mapping to HTTP
+
+```ts
+import { isBucketCodeError } from 'bucketcode'
+
+const STATUS: Record<string, number> = {
+  FILE_TOO_LARGE: 413,
+  INVALID_BODY: 400,
+  INVALID_KEY: 400,
+  MISSING_CONTENT_LENGTH: 411,
+}
+
+export function statusFor(error: unknown): number {
+  return (isBucketCodeError(error) && STATUS[error.code]) || 500
+}
+```
+
+Keep `UPLOAD_FAILED`, `GET_FAILED`, `DELETE_FAILED` and `INVALID_CONFIG` on 500: they mean
+something on your side is wrong, and they belong in your logs with `cause` attached.

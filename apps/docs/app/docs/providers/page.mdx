@@ -1,0 +1,87 @@
+export const metadata = {
+  title: 'S3-compatible providers',
+  description: 'Cloudflare R2, MinIO, Scaleway, Wasabi — the endpoint is the only difference.',
+}
+
+# S3-compatible providers
+
+Set `endpoint` and bucketcode adjusts two defaults for you:
+
+- `region` becomes `"auto"`, which is the convention for providers that ignore the region but
+  whose SDK still demands one.
+- `forcePathStyle` becomes `true` — `https://endpoint/bucket/key` rather than
+  `https://bucket.endpoint/key`. Self-hosted gateways require it and managed providers accept it.
+
+Both stay overridable.
+
+## Cloudflare R2
+
+```ts
+const bucket = createBucket({
+  bucket: 'my-bucket',
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  },
+  publicUrl: 'https://cdn.example.com', // your R2 custom domain
+})
+```
+
+R2 has no egress fees, which makes the public-URL path particularly attractive: upload through
+your server, serve through the custom domain.
+
+## MinIO
+
+```ts
+const bucket = createBucket({
+  bucket: 'my-bucket',
+  endpoint: 'http://localhost:9000',
+  credentials: { accessKeyId: 'minioadmin', secretAccessKey: 'minioadmin' },
+})
+```
+
+A local MinIO is the cheapest way to exercise the real code path in development and in CI:
+
+```sh
+docker run -p 9000:9000 -p 9001:9001 \
+  -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+  quay.io/minio/minio server /data --console-address ":9001"
+```
+
+## Scaleway Object Storage
+
+```ts
+const bucket = createBucket({
+  bucket: 'my-bucket',
+  region: 'fr-par',
+  endpoint: 'https://s3.fr-par.scw.cloud',
+  credentials: {
+    accessKeyId: process.env.SCW_ACCESS_KEY!,
+    secretAccessKey: process.env.SCW_SECRET_KEY!,
+  },
+})
+```
+
+Scaleway does use the region, so pass it explicitly rather than letting it default to `"auto"`.
+
+## Wasabi
+
+```ts
+const bucket = createBucket({
+  bucket: 'my-bucket',
+  region: 'eu-central-1',
+  endpoint: 'https://s3.eu-central-1.wasabisys.com',
+  credentials: {
+    accessKeyId: process.env.WASABI_ACCESS_KEY!,
+    secretAccessKey: process.env.WASABI_SECRET_KEY!,
+  },
+})
+```
+
+## A note on ACLs
+
+`upload()` accepts an `acl` option, but most buckets created after 2023 have ACLs disabled —
+AWS turns on "bucket owner enforced" by default, and R2 has no ACL support at all. Setting `acl`
+on such a bucket fails the request. Make objects public with a bucket policy or a CDN in front,
+and leave `acl` alone.

@@ -1,0 +1,54 @@
+export const metadata = {
+  title: 'Introduction',
+  description: 'What bucketcode is, what it deliberately is not, and when to reach for something else.',
+}
+
+# bucketcode
+
+Server-side S3 uploads, without the ceremony.
+
+```ts
+const bucket = createBucket({ bucket: 'my-bucket' })
+
+await bucket.upload(file) // → { key, path, url?, size?, etag?, contentType }
+await bucket.put(id, file) // one file per identifier: create or replace
+await bucket.get(id) // → the file back, or null
+await bucket.getUrl(id) // → public or presigned URL
+await bucket.delete(id) // → void
+```
+
+Every method runs a plain AWS SDK command from your server. Your credentials never reach the
+browser, so there is no CORS policy to write on the bucket and nothing to sign client-side.
+
+## What you get
+
+- **A small surface.** Five methods, all server-side. No dual client/server mode, no branch in
+  the code depending on where it runs.
+- **Keys that round-trip.** What `upload()` returns is what you hand back to `get()`, `getUrl()`
+  and `delete()`. The configured prefix is an internal namespace.
+- **Safety before the network.** Object keys are validated against traversal and absolute paths,
+  content types are detected, and size limits are enforced before a single byte leaves your server.
+- **Typed errors.** Everything throws a `BucketCodeError` carrying a stable `code`, with the
+  original error in `cause`.
+- **Any S3-compatible storage.** AWS S3, Cloudflare R2, MinIO, Scaleway, Wasabi, Ceph.
+
+## What it is not
+
+bucketcode sends the bytes from your server to S3 in a single `PutObject` request. That is the
+whole design, and it comes with one constraint you have to know about: the file transits through
+your runtime, so your runtime's request size limit applies — 6 MB on synchronous Lambda, 4.5 MB on
+Vercel serverless functions.
+
+Below those limits — avatars, documents, images, CSV exports — this is the simplest thing that
+works. Above them, a single `PutObject` is the wrong tool. See [Size limits and
+streams](/docs/limits) for the full picture and what v0.2 does about it.
+
+It is also not a general S3 client. There is no `list()`, no bucket administration, no lifecycle
+rules. If you need those, reach for `@aws-sdk/client-s3` directly — bucketcode hands you its
+underlying client through `bucket.client`, so the two mix freely.
+
+## Where to go next
+
+- [Installation](/docs/installation) — one package, two peer-free dependencies.
+- [Quick start](/docs/quick-start) — upload a file and read it back in a dozen lines.
+- [One file per identifier](/docs/use-cases/file-per-id) — the shape most applications need.

@@ -1,0 +1,82 @@
+export const metadata = {
+  title: 'Installation',
+  description: 'Install bucketcode and give it credentials.',
+}
+
+# Installation
+
+```sh
+npm install bucketcode
+```
+
+```sh
+pnpm add bucketcode
+```
+
+```sh
+yarn add bucketcode
+```
+
+Node 20 or later — that is what AWS SDK v3 requires. `@aws-sdk/client-s3` and
+`@aws-sdk/s3-request-presigner` come along as dependencies, so there is nothing else to install
+and no peer dependency to satisfy.
+
+The package ships ESM and CommonJS builds with TypeScript declarations for both, so `import` and
+`require` both work.
+
+## Credentials
+
+bucketcode never asks for credentials it does not need. Pass them explicitly:
+
+```ts
+import { createBucket } from 'bucketcode'
+
+const bucket = createBucket({
+  bucket: 'my-bucket',
+  region: 'eu-west-3',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+})
+```
+
+Or omit them and let the AWS default provider chain do its job — environment variables, the shared
+config file, an EC2 instance role, an ECS task role, a Lambda execution role:
+
+```ts
+const bucket = createBucket({ bucket: 'my-bucket', region: 'eu-west-3' })
+```
+
+On a managed runtime, the role is the better answer: nothing to rotate and nothing to leak.
+
+## Environment variables
+
+Every option except `client` falls back to an environment variable, so with `S3_BUCKET` and the
+usual `AWS_*` variables set, this is enough:
+
+```ts
+const bucket = createBucket()
+```
+
+See [Configuration](/docs/configuration) for the full list.
+
+## IAM permissions
+
+The minimum policy for a bucket used by bucketcode:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::my-bucket/*"
+    }
+  ]
+}
+```
+
+`getUrl()` needs no extra permission: presigning is a local computation over the credentials you
+already hold. The URL it produces grants exactly the `s3:GetObject` your own credentials have.

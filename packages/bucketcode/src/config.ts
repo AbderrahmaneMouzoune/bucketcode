@@ -48,7 +48,8 @@ export function resolveConfig(config: BucketConfig = {}): ResolvedConfig {
     bucket: bucket.trim(),
     // R2 and most S3-compatible endpoints ignore the region but the SDK still
     // requires one; "auto" is the convention.
-    region: config.region ?? env('BUCKETCODE_REGION', 'AWS_REGION', 'AWS_DEFAULT_REGION') ?? (endpoint ? 'auto' : undefined),
+    region:
+      config.region ?? env('BUCKETCODE_REGION', 'AWS_REGION', 'AWS_DEFAULT_REGION') ?? (endpoint ? 'auto' : undefined),
     credentials: config.credentials,
     endpoint,
     // Path style is what self-hosted gateways (MinIO, Ceph) expect, and every

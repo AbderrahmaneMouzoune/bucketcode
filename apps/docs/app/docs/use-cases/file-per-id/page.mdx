@@ -1,0 +1,171 @@
+export const metadata = {
+  title: 'One file per identifier',
+  description: 'A row in your database holds XK5892, the bucket holds the file for it.',
+}
+
+# One file per identifier
+
+The shape most applications actually need: a row in your database holds a short id, and the bucket
+holds the file that belongs to it. Uploading a new version replaces the old one — no orphan to
+clean up, no second column to keep in sync.
+
+```ts
+import { nanoid } from 'nanoid'
+import { createBucket } from 'bucketcode'
+
+const bucket = createBucket({ bucket: 'my-bucket', prefix: 'files' })
+
+const id = nanoid(6) // "XK5892"
+
+await bucket.put(id, file) // create
+await bucket.put(id, newVersion) // replace — same id, nothing to clean up
+
+const stored = await bucket.get(id)
+
+if (stored) {
+  stored.filename // "rapport.pdf" — the name it was uploaded with
+  stored.contentType // "application/pdf"
+  stored.size // 48213
+  await stored.bytes() // Uint8Array
+}
+```
+
+The configured prefix stays internal: you store `"XK5892"`, the bucket holds `files/XK5892`, and
+every method takes the plain id.
+
+## Why the id carries no extension
+
+The object key is the id and nothing else. That is what makes replacement work: uploading a PDF
+over a PNG lands on the same key, so there is never a stale `XK5892.png` sitting next to
+`XK5892.pdf`.
+
+The type is not lost — S3 stores it as the object's content type, and bucketcode stores the
+original filename as user metadata. `get()` gives you both back.
+
+## The upload route
+
+```ts
+// app/api/files/route.ts
+import { nanoid } from 'nanoid'
+import { createBucket, isBucketCodeError } from 'bucketcode'
+
+import { db } from '@/lib/db'
+
+const bucket = createBucket({
+  bucket: process.env.S3_BUCKET,
+  prefix: 'files',
+  maxSize: 4 * 1024 * 1024,
+})
+
+export async function POST(request: Request) {
+  const form = await request.formData()
+  const file = form.get('file')
+
+  if (!(file instanceof File)) {
+    return Response.json({ error: 'Missing file' }, { status: 400 })
+  }
+
+  const id = nanoid(6)
+
+  try {
+    const result = await bucket.put(id, file)
+
+    await db.document.create({
+      data: { id, filename: file.name, contentType: result.contentType, size: result.size },
+    })
+
+    return Response.json({ id }, { status: 201 })
+  } catch (error) {
+    if (isBucketCodeError(error) && error.code === 'FILE_TOO_LARGE') {
+      return Response.json({ error: 'File too large' }, { status: 413 })
+    }
+
+    throw error
+  }
+}
+```
+
+Write the database row _after_ the upload succeeds. The other order leaves you with rows pointing
+at objects that were never stored.
+
+## The replace route
+
+```ts
+// app/api/files/[id]/route.ts
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const document = await db.document.findUnique({ where: { id } })
+
+  if (!document) return new Response('Not found', { status: 404 })
+
+  const form = await request.formData()
+  const file = form.get('file')
+
+  if (!(file instanceof File)) {
+    return Response.json({ error: 'Missing file' }, { status: 400 })
+  }
+
+  const result = await bucket.put(id, file)
+
+  await db.document.update({
+    where: { id },
+    data: { filename: file.name, contentType: result.contentType, size: result.size },
+  })
+
+  return Response.json({ id })
+}
+```
+
+Check the row exists first. Otherwise anyone can write to any id they can guess, and a six
+character id is very guessable.
+
+## The download route
+
+Cheapest — your server signs a URL and S3 serves the bytes:
+
+```ts
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+
+  return Response.redirect(await bucket.getUrl(id, { expiresIn: 60 }))
+}
+```
+
+Or stream it through your route, when you need to check permissions or answer 404 yourself:
+
+```ts
+import { Readable } from 'node:stream'
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const file = await bucket.get(id)
+
+  if (!file) return new Response('Not found', { status: 404 })
+
+  return new Response(Readable.toWeb(file.body) as ReadableStream, {
+    headers: {
+      'Content-Type': file.contentType,
+      ...(file.filename ? { 'Content-Disposition': `inline; filename="${file.filename}"` } : {}),
+    },
+  })
+}
+```
+
+The redirect keeps the bytes off your runtime entirely, which is what you want as files grow. The
+streaming version is the one to pick when the permission check has to happen on every read.
+
+## Deleting
+
+```ts
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+
+  await bucket.delete(id)
+  await db.document.delete({ where: { id } })
+
+  return new Response(null, { status: 204 })
+}
+```
+
+Delete the object first: `delete()` on a key that is already gone succeeds quietly, so a retry
+after a partial failure converges instead of getting stuck.

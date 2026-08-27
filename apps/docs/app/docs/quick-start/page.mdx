@@ -1,0 +1,85 @@
+export const metadata = {
+  title: 'Quick start',
+  description: 'Upload a file, get a URL for it, delete it.',
+}
+
+# Quick start
+
+```ts
+import { createBucket } from 'bucketcode'
+
+const bucket = createBucket({
+  bucket: 'my-bucket',
+  region: 'eu-west-3',
+})
+
+const { key, size } = await bucket.upload(Buffer.from('hello'), { key: 'greeting.txt' })
+
+const url = await bucket.getUrl(key, { expiresIn: 900 })
+
+await bucket.delete(key)
+```
+
+That is the whole flow. `createBucket()` is cheap — the underlying `S3Client` is built on the first
+request — so calling it at module scope is fine.
+
+## Uploading a browser file
+
+In a Next.js route handler, `request.formData()` hands you a `File`. Pass it straight through:
+
+```ts
+// app/api/upload/route.ts
+import { createBucket, isBucketCodeError } from 'bucketcode'
+
+const bucket = createBucket({
+  bucket: process.env.S3_BUCKET,
+  prefix: 'uploads',
+  maxSize: 4 * 1024 * 1024,
+})
+
+export async function POST(request: Request) {
+  const form = await request.formData()
+  const file = form.get('file')
+
+  if (!(file instanceof File)) {
+    return Response.json({ error: 'Missing file' }, { status: 400 })
+  }
+
+  try {
+    // No key: bucketcode generates one and detects the content type.
+    const result = await bucket.upload(file)
+
+    return Response.json({ key: result.key, url: await bucket.getUrl(result.key) })
+  } catch (error) {
+    if (isBucketCodeError(error) && error.code === 'FILE_TOO_LARGE') {
+      return Response.json({ error: 'File too large' }, { status: 413 })
+    }
+
+    throw error
+  }
+}
+```
+
+With no `key`, bucketcode generates `<uuid>-<filename>` — collision-free, and still readable in the
+bucket. The content type comes from the `File` itself, falling back to the extension.
+
+## Reading it back
+
+```ts
+const stored = await bucket.get(key)
+
+if (stored) {
+  stored.contentType // "image/png"
+  stored.filename // "avatar.png" — the name it was uploaded with
+  await stored.bytes() // Uint8Array
+}
+```
+
+`get()` returns `null` when nothing is stored under that key, so a missing file is a value you
+branch on rather than an exception you catch.
+
+## Next
+
+- [One file per identifier](/docs/use-cases/file-per-id) — `put(id, file)` and `get(id)`.
+- [Configuration](/docs/configuration) — prefixes, public URLs, size caps.
+- [Size limits and streams](/docs/limits) — read this before you ship.
