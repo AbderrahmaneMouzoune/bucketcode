@@ -1,0 +1,105 @@
+---
+title: 'End-to-end encrypted sync'
+description: 'Encrypt in the browser with a passphrase. Your server stores bytes it cannot read.'
+---
+
+By default your server can read every snapshot it stores. For a journal, a password manager or
+health data, that is the wrong default — and it is also a liability you may not want.
+
+bucketcode stores whatever you hand it. Encrypt in the browser and it stores ciphertext, without
+needing to know:
+
+```ts
+await store.putSnapshot(code, { ciphertext, iv, salt }, { app: 'notes' })
+```
+
+The envelope, the sync code, the expiry and the conditional writes all keep working. Only `data`
+becomes opaque.
+
+## In the browser
+
+WebCrypto is enough — no dependency. Derive a key from a passphrase with PBKDF2, encrypt with
+AES-GCM:
+
+```ts
+const KEY_ITERATIONS = 600_000 // OWASP's floor for PBKDF2-SHA256
+
+async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
+  const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, [
+    'deriveKey',
+  ])
+
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: KEY_ITERATIONS, hash: 'SHA-256' },
+    material,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  )
+}
+
+export async function encryptState(state: unknown, passphrase: string) {
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const key = await deriveKey(passphrase, salt)
+
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(JSON.stringify(state)),
+  )
+
+  return {
+    ciphertext: toBase64(new Uint8Array(ciphertext)),
+    iv: toBase64(iv),
+    salt: toBase64(salt),
+  }
+}
+
+export async function decryptState<T>(payload: { ciphertext: string; iv: string; salt: string }, passphrase: string) {
+  const key = await deriveKey(passphrase, fromBase64(payload.salt))
+
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: fromBase64(payload.iv) },
+    key,
+    fromBase64(payload.ciphertext),
+  )
+
+  return JSON.parse(new TextDecoder().decode(plaintext)) as T
+}
+```
+
+A fresh `salt` and `iv` per snapshot are not optional. Reusing an IV with the same key breaks
+AES-GCM outright — and since a backup rewrites the same state repeatedly, this is exactly the
+setting where the mistake gets made.
+
+## What it costs
+
+**Compression stops working.** Ciphertext is incompressible, so the gzip that normally buys 5–10×
+buys nothing. Compress _before_ encrypting if you need the headroom:
+
+```ts
+const json = JSON.stringify(state)
+const compressed = await new Response(
+  new Blob([json]).stream().pipeThrough(new CompressionStream('gzip')),
+).arrayBuffer()
+// …then encrypt `compressed`, and pass { compress: false } to putSnapshot
+```
+
+**Base64 costs a third.** Binary in JSON has to be encoded, which inflates it by ~33% on top of
+the ciphertext. Between that and the lost compression, an encrypted snapshot is several times the
+size of a plain one — mind [the ceiling](/docs/limits).
+
+**A lost passphrase is lost data.** There is no reset. Say so in the interface, before the user
+picks one, not after.
+
+**The passphrase must travel too.** The user now carries a code _and_ a passphrase to the new
+device. Either they already know it (they chose it), or you are back to transmitting a secret —
+which the code was supposed to avoid. Encryption is the right call when the data warrants it, not
+a free upgrade.
+
+## What it does not protect
+
+Your server still sees _when_ each snapshot was written, how large it is, and which account or
+code it belongs to. Encryption hides contents, not metadata. And it does nothing about a
+compromised browser — if the page is hostile, it holds the plaintext and the key.

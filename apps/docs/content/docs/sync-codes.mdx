@@ -1,0 +1,134 @@
+---
+title: 'Sync codes'
+description: 'A code somebody has to read off one screen and type into another — in whatever shape your app needs.'
+---
+
+A sync code is the whole user experience of moving between devices: it appears on the old phone,
+and the user types it into the new one. Everything about it is shaped by that.
+
+```ts
+const store = createBucket({ bucket: 'my-bucket' })
+
+store.codes.create() // "K7QP2M4X"
+store.codes.normalize('k7-qp2m4x') // "K7QP2M4X"
+```
+
+`store.codes` pairs generation with the normalization that reads codes back, so the two can never
+disagree about the alphabet. Codes are generated with [nanoid](https://github.com/ai/nanoid).
+
+## Choosing a shape
+
+The default is eight characters of Crockford base32 — 40 bits, and unguessable in any useful
+sense. Both halves are configurable, because a code someone reads over the phone should probably
+not be eight characters:
+
+```ts
+import { createBucket, syncCodeAlphabets } from 'bucketcode'
+
+const store = createBucket({
+  bucket: 'my-bucket',
+  syncCode: { length: 4, alphabet: syncCodeAlphabets.digits },
+})
+
+store.codes.create() // "8143"
+store.codes.entropyBits // 13.29
+```
+
+[Configuring codes](/docs/code-configuration) covers the alphabets that ship, what each shape is
+worth against a guessing attacker, how to write your own alphabet, and what happens to codes
+already issued when you change the shape.
+
+## Why Crockford by default
+
+[Crockford base32](https://www.crockford.com/base32.html) drops `I`, `L`, `O` and `U`. The first
+three are the characters people misread — `I` for `1`, `O` for `0`, `L` for `1` — and dropping `U`
+keeps a random code from spelling something unfortunate.
+
+`normalize()` then repairs those misreadings on the way back in, but only when the alphabet makes
+the repair unambiguous: `O` folds to zero when the alphabet has a zero and no letter `O` to confuse
+it with. That property holds for Crockford and for digits, so both get the repair for free. An
+alphabet that contains both `O` and `0` gets no folding, because there would be no way to know
+which one the user meant.
+
+```ts
+store.codes.normalize('K7QP2M4X') // "K7QP2M4X"
+store.codes.normalize('k7qp2m4x') // "K7QP2M4X" — case folded
+store.codes.normalize('K7-QP2M 4X') // "K7QP2M4X" — separators dropped
+store.codes.normalize('OIL5ABCD') // "0115ABCD" — misreadings repaired
+```
+
+Case is folded only when the alphabet has a single case. A mixed-case alphabet keeps what the user
+typed, since upper-casing it would break the lookup.
+
+Call `normalize()` on user input before you look anything up, and let it throw: a code with a
+character the alphabet cannot contain does not exist, so `INVALID_SYNC_CODE` is a better answer
+than a lookup that finds nothing — and it costs no request.
+
+```ts
+try {
+  const code = store.codes.normalize(typed)
+  return await store.getSnapshot(code)
+} catch (error) {
+  if (isBucketCodeError(error) && error.code === 'INVALID_SYNC_CODE') {
+    return Response.json({ error: 'That does not look like a code' }, { status: 400 })
+  }
+
+  throw error
+}
+```
+
+## How guessable is it
+
+Not very, at the default: 40 bits is about 1.1 × 10¹² codes. A shorter shape trades that away
+deliberately — four digits is ten thousand codes, which an unthrottled attacker walks through in
+seconds.
+
+What makes any of them safe is that a live code is a needle in that haystack **for a short
+window**:
+
+- Give every transfer code a short `expiresIn`. An hour is generous; a working transfer takes a
+  minute.
+- Rate-limit the lookup route. This is what actually protects a short code, and the shorter the
+  code, the more of the work it is doing.
+- Pass `ifAbsent: true` on write, so a generated code that happens to be taken fails loudly instead
+  of overwriting somebody else's snapshot.
+
+```ts
+await store.putSnapshot(code, state, { expiresIn: 60 * 60, ifAbsent: true })
+```
+
+The numbers behind that trade-off are on [Configuring codes](/docs/code-configuration).
+
+## A code is a bearer token
+
+Anyone holding a live code can read that snapshot. That is inherent: the receiving device has no
+account, no session and no keys — the code _is_ the authentication. Which means:
+
+- Do not log codes, and keep them out of URLs you send to analytics.
+- Do not reuse one code for repeated syncing. Generate a new one per transfer.
+- If the data is genuinely sensitive, do not rely on the code at all: encrypt in the browser before
+  it reaches your server. See [end-to-end encrypted sync](/docs/use-cases/encrypted-sync).
+
+For a continuous per-account backup, skip codes entirely and key the snapshot by user id behind
+your normal session check — see [continuous backup](/docs/use-cases/continuous-backup).
+
+## Codes are keys, not magic
+
+A code is just an object key, so everything else in the package applies to it. It goes through the
+same validation as any key, and the configured `prefix` applies:
+
+```ts
+const store = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
+
+await store.putSnapshot('K7QP2M4X', state) // stores snapshots/K7QP2M4X
+await store.delete('K7QP2M4X') // burns it, once the transfer is done
+```
+
+Burning a code after a successful restore is a good habit: the transfer is over, and the token
+should stop working. There is no separate call for it — `delete()` is the whole of it.
+
+## Outside a store
+
+`createSyncCodes()`, `createSyncCode()` and `normalizeSyncCode()` build or use a scheme without a
+store — see [Configuring codes](/docs/code-configuration). Prefer `store.codes` in application
+code: configuring the shape in one place is what keeps the two sides in agreement.

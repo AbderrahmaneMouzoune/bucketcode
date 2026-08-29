@@ -1,0 +1,72 @@
+{
+  "name": "bucketcode",
+  "version": "0.1.0",
+  "description": "Server-side S3 uploads and downloads: upload, put, get, getUrl, delete. Works with AWS S3, Cloudflare R2, MinIO and any S3-compatible storage.",
+  "keywords": [
+    "s3",
+    "upload",
+    "aws",
+    "r2",
+    "minio",
+    "storage",
+    "bucket",
+    "presigned-url",
+    "nextjs",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Abderrahmane Mouzoune",
+  "homepage": "https://github.com/AbderrahmaneMouzoune/bucketcode#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AbderrahmaneMouzoune/bucketcode.git",
+    "directory": "packages/bucketcode"
+  },
+  "bugs": {
+    "url": "https://github.com/AbderrahmaneMouzoune/bucketcode/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@aws-sdk/s3-request-presigner": "^3.700.0",
+    "nanoid": "^6.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11"
+  }
+}
