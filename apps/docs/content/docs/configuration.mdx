@@ -25,18 +25,18 @@ createBucket({
 
 ## Options
 
-| Option           | Environment fallback                                    | Notes                                                                  |
-| ---------------- | ------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `bucket`         | `BUCKETCODE_BUCKET`, `S3_BUCKET`                        | The only required option.                                              |
-| `region`         | `BUCKETCODE_REGION`, `AWS_REGION`, `AWS_DEFAULT_REGION` | Defaults to `"auto"` when an `endpoint` is set.                        |
-| `credentials`    | —                                                       | Omit for the AWS default provider chain.                               |
-| `endpoint`       | `BUCKETCODE_ENDPOINT`, `S3_ENDPOINT`                    | For R2, MinIO, Scaleway, Wasabi…                                       |
-| `forcePathStyle` | —                                                       | Defaults to `true` with a custom `endpoint`, `false` otherwise.        |
-| `publicUrl`      | `BUCKETCODE_PUBLIC_URL`, `S3_PUBLIC_URL`                | Must be an absolute URL. Trailing slash optional.                      |
-| `prefix`         | —                                                       | Applied by every method.                                               |
-| `maxSize`        | —                                                       | In bytes. Enforced before any network call.                            |
-| `syncCode`       | —                                                       | `{ length, alphabet }`. Defaults to eight Crockford base32 characters. |
-| `client`         | —                                                       | An `S3Client` you built yourself.                                      |
+| Option           | Environment fallback                                    | Notes                                                                                                                      |
+| ---------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `bucket`         | `BUCKETCODE_BUCKET`, `S3_BUCKET`                        | The only required option.                                                                                                  |
+| `region`         | `BUCKETCODE_REGION`, `AWS_REGION`, `AWS_DEFAULT_REGION` | Defaults to `"auto"` when an `endpoint` is set.                                                                            |
+| `credentials`    | —                                                       | Omit for the AWS default provider chain.                                                                                   |
+| `endpoint`       | `BUCKETCODE_ENDPOINT`, `S3_ENDPOINT`                    | For R2, MinIO, Scaleway, Wasabi…                                                                                           |
+| `forcePathStyle` | —                                                       | Defaults to `true` with a custom `endpoint`, `false` otherwise.                                                            |
+| `publicUrl`      | `BUCKETCODE_PUBLIC_URL`, `S3_PUBLIC_URL`                | Must be an absolute URL. Trailing slash optional.                                                                          |
+| `prefix`         | —                                                       | Applied by every method.                                                                                                   |
+| `maxSize`        | —                                                       | In bytes. Enforced before any network call.                                                                                |
+| `syncCode`       | —                                                       | `{ length, alphabet }`. Defaults to eight Crockford base32 characters — see [Configuring codes](/docs/code-configuration). |
+| `client`         | —                                                       | An `S3Client` you built yourself.                                                                                          |
 
 ## The prefix is a namespace, not part of the key
 

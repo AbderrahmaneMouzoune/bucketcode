@@ -110,6 +110,8 @@ const codes = createSyncCodes({ length: 4, alphabet: syncCodeAlphabets.digits })
 | `length`   | `8`, at most 64                                                                                    |
 | `alphabet` | `syncCodeAlphabets.crockford` — at least two distinct characters, no spaces, dashes or underscores |
 
+See [Configuring codes](/docs/code-configuration) for what each shape costs.
+
 ## `createSyncCode(options?)` and `normalizeSyncCode(input, options?)`
 
 The one-shot forms, on the default scheme unless you pass options. Prefer `store.codes` in

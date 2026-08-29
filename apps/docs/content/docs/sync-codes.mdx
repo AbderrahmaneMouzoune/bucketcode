@@ -18,7 +18,9 @@ disagree about the alphabet. Codes are generated with [nanoid](https://github.co
 
 ## Choosing a shape
 
-Configure it once, on the store:
+The default is eight characters of Crockford base32 — 40 bits, and unguessable in any useful
+sense. Both halves are configurable, because a code someone reads over the phone should probably
+not be eight characters:
 
 ```ts
 import { createBucket, syncCodeAlphabets } from 'bucketcode'
@@ -29,28 +31,12 @@ const store = createBucket({
 })
 
 store.codes.create() // "8143"
+store.codes.entropyBits // 13.29
 ```
 
-| Option     | Default                       |                                                                     |
-| ---------- | ----------------------------- | ------------------------------------------------------------------- |
-| `length`   | `8`                           | Number of characters, at most 64.                                   |
-| `alphabet` | `syncCodeAlphabets.crockford` | At least two distinct characters, no spaces, dashes or underscores. |
-
-Three alphabets ship with the package, and you can pass any string of your own:
-
-| `syncCodeAlphabets` |                                                  | Bits per character |
-| ------------------- | ------------------------------------------------ | ------------------ |
-| `crockford`         | `0123456789ABCDEFGHJKMNPQRSTVWXYZ` — the default | 5                  |
-| `digits`            | `0123456789`                                     | 3.32               |
-| `alphanumeric`      | `A–Z` and `0–9`, confusable characters included  | 5.17               |
-
-Four digits is a real choice for a code someone reads aloud on the phone. Eight Crockford
-characters is the right default for one they copy off a screen. Both are supported; the difference
-is what each is worth guessing against, which the package will tell you:
-
-```ts
-store.codes.entropyBits // 40 for the default, 13.29 for four digits
-```
+[Configuring codes](/docs/code-configuration) covers the alphabets that ship, what each shape is
+worth against a guessing attacker, how to write your own alphabet, and what happens to codes
+already issued when you change the shape.
 
 ## Why Crockford by default
 
@@ -93,14 +79,17 @@ try {
 
 ## How guessable is it
 
-Eight characters of base32 is 40 bits — about 1.1 × 10¹² codes. Four digits is 13.3 bits, or ten
-thousand. Neither is a secret. What makes a code safe enough is that a live one is a needle in that
-haystack **for a short window**:
+Not very, at the default: 40 bits is about 1.1 × 10¹² codes. A shorter shape trades that away
+deliberately — four digits is ten thousand codes, which an unthrottled attacker walks through in
+seconds.
+
+What makes any of them safe is that a live code is a needle in that haystack **for a short
+window**:
 
 - Give every transfer code a short `expiresIn`. An hour is generous; a working transfer takes a
   minute.
-- Rate-limit the lookup route. This is what actually protects a short code: with ten thousand
-  possibilities and no limit, an attacker walks the whole space in seconds; with one, they do not.
+- Rate-limit the lookup route. This is what actually protects a short code, and the shorter the
+  code, the more of the work it is doing.
 - Pass `ifAbsent: true` on write, so a generated code that happens to be taken fails loudly instead
   of overwriting somebody else's snapshot.
 
@@ -108,8 +97,7 @@ haystack **for a short window**:
 await store.putSnapshot(code, state, { expiresIn: 60 * 60, ifAbsent: true })
 ```
 
-The shorter the code, the more the rate limit is doing the work. Four digits without one is not a
-transfer code, it is a public URL.
+The numbers behind that trade-off are on [Configuring codes](/docs/code-configuration).
 
 ## A code is a bearer token
 
@@ -141,17 +129,6 @@ should stop working. There is no separate call for it — `delete()` is the whol
 
 ## Outside a store
 
-`createSyncCodes()` builds a scheme on its own, and `createSyncCode()` / `normalizeSyncCode()` use
-the default one, for the cases where you have no store at hand:
-
-```ts
-import { createSyncCode, createSyncCodes, normalizeSyncCode } from 'bucketcode'
-
-const codes = createSyncCodes({ length: 6 })
-
-createSyncCode() // default scheme
-normalizeSyncCode('k7qp2m4x') // default scheme
-```
-
-Prefer `store.codes` in application code: configuring the shape in one place is what keeps the two
-sides in agreement.
+`createSyncCodes()`, `createSyncCode()` and `normalizeSyncCode()` build or use a scheme without a
+store — see [Configuring codes](/docs/code-configuration). Prefer `store.codes` in application
+code: configuring the shape in one place is what keeps the two sides in agreement.

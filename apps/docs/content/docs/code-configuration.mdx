@@ -1,0 +1,159 @@
+---
+title: 'Configuring codes'
+description: 'Length, alphabet, and what each choice costs — including what happens to codes already out there when you change your mind.'
+---
+
+A sync code has two knobs, and both live on the store so that generation and normalization can
+never disagree:
+
+```ts
+import { createBucket, syncCodeAlphabets } from 'bucketcode'
+
+const store = createBucket({
+  bucket: 'my-bucket',
+  syncCode: {
+    length: 4,
+    alphabet: syncCodeAlphabets.digits,
+  },
+})
+
+store.codes.create() // "8143"
+```
+
+| Option     | Default                       |                                                                                                                                                            |
+| ---------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `length`   | `8`                           | Number of characters, from 1 to 64.                                                                                                                        |
+| `alphabet` | `syncCodeAlphabets.crockford` | At least two distinct characters. No spaces, dashes or underscores — those are stripped when a typed code is read back, so a code could never contain one. |
+
+## The alphabets that ship
+
+| `syncCodeAlphabets` | Characters                             | Bits each |
+| ------------------- | -------------------------------------- | --------- |
+| `crockford`         | `0123456789ABCDEFGHJKMNPQRSTVWXYZ`     | 5         |
+| `digits`            | `0123456789`                           | 3.32      |
+| `alphanumeric`      | `ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789` | 5.17      |
+
+`crockford` is the default because it is the one designed for this exact problem — a value a human
+reads off one screen and types into another. It drops `I`, `L`, `O` and `U`: the first three are
+what people misread, and losing `U` keeps a random code from spelling something unfortunate.
+
+`alphanumeric` is there for when you need the extra bit per character and control the display well
+enough that `O` versus `0` will not bite you. It is the wrong default and a fine deliberate choice.
+
+## Choosing a shape
+
+The question is never "how long should a code be" on its own. It is how long a code lives, and how
+many guesses per second your lookup route allows:
+
+| Shape                     | Bits   | Expected guesses at 10/s | at 1000/s      |
+| ------------------------- | ------ | ------------------------ | -------------- |
+| 4 digits                  | 13.3   | 8 minutes                | 5 seconds      |
+| 6 digits                  | 19.9   | 14 hours                 | 8 minutes      |
+| 6 Crockford               | 30     | 2 years                  | 6 days         |
+| **8 Crockford** (default) | **40** | **2000 years**           | **17 years**   |
+| 12 Crockford              | 60     | beyond meaning           | beyond meaning |
+
+Read that table with the code's lifetime next to it. A four-digit code is guessable in eight
+minutes at ten attempts per second — which is fine if it expires in five and your route is rate
+limited, and catastrophic if it lives for a day behind an open endpoint.
+
+```ts
+// A four-digit code someone reads over the phone.
+const store = createBucket({
+  bucket: 'my-bucket',
+  syncCode: { length: 4, alphabet: syncCodeAlphabets.digits },
+})
+
+await store.putSnapshot(code, state, {
+  expiresIn: 5 * 60, // minutes, not hours
+  ifAbsent: true,
+})
+```
+
+The package will tell you what you picked, so you can assert on it or log it at boot:
+
+```ts
+store.codes.entropyBits // 13.29
+```
+
+Short codes are a real product choice — reading eight characters aloud is miserable. They are only
+safe with a short expiry **and** a rate limit on the lookup. Without the rate limit, a four-digit
+code is not a code, it is a public URL.
+
+## Custom alphabets
+
+Any string works, subject to two rules: at least two distinct characters, and no spaces, dashes or
+underscores.
+
+```ts
+createBucket({
+  bucket: 'my-bucket',
+  syncCode: { length: 6, alphabet: 'ABCDEFGHJKMNPQRSTUVWXYZ' }, // letters only, no I, L or O
+})
+```
+
+What `normalize()` does is **derived from the alphabet**, not hardcoded — which is why the two
+halves belong on one object:
+
+| When the alphabet…   | `normalize()`                                                      |
+| -------------------- | ------------------------------------------------------------------ |
+| always               | strips spaces, dashes and underscores                              |
+| has a single case    | folds case, so `k7qp` finds `K7QP`                                 |
+| has both cases       | keeps case as typed — folding it would break the lookup            |
+| has `0` and no `O`   | reads a typed `O` as zero                                          |
+| has `1` and no `I`   | reads a typed `I` as one                                           |
+| has `1` and no `L`   | reads a typed `L` as one                                           |
+| has both `0` and `O` | leaves both alone, because there is no way to know which was meant |
+
+So a digits alphabet gets the confusable repairs for free, and `alphanumeric` gets none of them.
+That is the honest behaviour: a repair is only safe when the alphabet makes it unambiguous.
+
+`normalize()` validates characters, not length. A code of the wrong length made of valid characters
+comes back unchanged and simply finds nothing — which is what you want, since a lookup miss and an
+expired code should look the same to the person typing.
+
+## Changing the shape later
+
+Codes already issued do not migrate. Under a new alphabet, an old code containing a character the
+new one lacks throws `INVALID_SYNC_CODE`; under a new length, it normalizes fine and finds nothing.
+
+For transfer codes this is a non-event, and that is the argument for keeping `expiresIn` short:
+change the shape, and the only codes affected are the ones issued in the last hour. Ship it and
+move on.
+
+If you need a real transition — long-lived codes, or a shape change you cannot schedule — keep the
+old scheme around for reads:
+
+```ts
+import { createSyncCodes, syncCodeAlphabets } from 'bucketcode'
+
+const legacy = createSyncCodes({ length: 8, alphabet: syncCodeAlphabets.crockford })
+
+function normalizeEither(typed: string): string {
+  try {
+    return store.codes.normalize(typed)
+  } catch {
+    return legacy.normalize(typed) // throws in turn if it is neither
+  }
+}
+```
+
+Read through both, write only through the new one, and drop the fallback once the old codes have
+expired.
+
+## Outside a store
+
+`createSyncCodes()` builds a scheme on its own — useful in tests, scripts, or anywhere you have no
+store at hand:
+
+```ts
+import { createSyncCode, createSyncCodes, normalizeSyncCode } from 'bucketcode'
+
+const codes = createSyncCodes({ length: 6 })
+
+createSyncCode() // the default scheme
+normalizeSyncCode('k7qp2m4x') // the default scheme
+```
+
+Prefer `store.codes` in application code. Configuring the shape in one place is the whole point:
+two call sites that each build their own scheme are two call sites that can disagree.
