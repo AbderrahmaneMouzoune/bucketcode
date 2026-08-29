@@ -1,4 +1,3 @@
-import { randomInt } from 'node:crypto'
 import { gunzipSync, gzipSync } from 'node:zlib'
 
 import { BucketCodeError } from './errors.js'
@@ -7,59 +6,7 @@ import type { SnapshotEnvelope } from './types.js'
 /** Bumped only if the envelope shape itself changes, never for your own data. */
 export const ENVELOPE_VERSION = 1
 
-/**
- * Crockford base32: no I, L, O or U, so a code survives being read aloud,
- * written down, or typed on a phone keyboard.
- */
-const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 const GZIP_MAGIC = [0x1f, 0x8b]
-
-/** A short, unambiguous code a person can carry from one device to another. */
-export function createSyncCode(length = 8): string {
-  if (!Number.isInteger(length) || length < 4 || length > 32) {
-    throw new BucketCodeError('INVALID_SYNC_CODE', 'A sync code must be between 4 and 32 characters long.')
-  }
-
-  let code = ''
-  for (let index = 0; index < length; index += 1) {
-    code += ALPHABET[randomInt(0, ALPHABET.length)]
-  }
-
-  return code
-}
-
-/**
- * Turns what someone typed into the canonical code: case is ignored, spaces and
- * dashes are dropped, and the characters people confuse are folded the way
- * Crockford base32 prescribes — `O` reads as zero, `I` and `L` as one.
- */
-export function normalizeSyncCode(input: string): string {
-  if (typeof input !== 'string') {
-    throw new BucketCodeError('INVALID_SYNC_CODE', 'A sync code must be a string.')
-  }
-
-  const normalized = input
-    .trim()
-    .toUpperCase()
-    .replace(/[\s-]+/g, '')
-    .replace(/[IL]/g, '1')
-    .replace(/O/g, '0')
-
-  if (normalized.length === 0) {
-    throw new BucketCodeError('INVALID_SYNC_CODE', 'A sync code must not be empty.')
-  }
-
-  for (const character of normalized) {
-    if (!ALPHABET.includes(character)) {
-      throw new BucketCodeError(
-        'INVALID_SYNC_CODE',
-        `"${input}" is not a valid sync code: "${character}" is not one of ${ALPHABET}.`,
-      )
-    }
-  }
-
-  return normalized
-}
 
 /** JSON, then gzip unless asked otherwise. A snapshot is mostly repetitive text. */
 export function encodeSnapshot(envelope: SnapshotEnvelope, compress: boolean): Uint8Array {

@@ -78,26 +78,51 @@ back the same way.
 
 ---
 
-## `createSyncCode(length?)`
+## `store.codes`
 
-A short, unambiguous code from [Crockford base32](https://www.crockford.com/base32.html). Defaults
-to eight characters; accepts 4 to 32.
+The code scheme, in the shape `syncCode` configured. Generation and normalization come from the
+same object, so they cannot disagree about the alphabet. See [Sync codes](/docs/sync-codes).
+
+```ts
+store.codes.create() // "K7QP2M4X"
+store.codes.normalize('k7-qp2m4x') // "K7QP2M4X"
+```
+
+| Member               |                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------ |
+| `create()`           | A fresh code, generated with [nanoid](https://github.com/ai/nanoid).                                   |
+| `normalize(input)`   | What someone typed, canonicalized. Throws `INVALID_SYNC_CODE` on anything the alphabet cannot contain. |
+| `alphabet`, `length` | What the scheme was configured with.                                                                   |
+| `entropyBits`        | What a code is worth guessing against — 40 for the default, 13.29 for four digits.                     |
+
+## `createSyncCodes(options?)`
+
+Builds a scheme outside a store. Same object as `store.codes`.
+
+```ts
+import { createSyncCodes, syncCodeAlphabets } from 'bucketcode'
+
+const codes = createSyncCodes({ length: 4, alphabet: syncCodeAlphabets.digits })
+```
+
+| Option     | Default                                                                                            |
+| ---------- | -------------------------------------------------------------------------------------------------- |
+| `length`   | `8`, at most 64                                                                                    |
+| `alphabet` | `syncCodeAlphabets.crockford` — at least two distinct characters, no spaces, dashes or underscores |
+
+## `createSyncCode(options?)` and `normalizeSyncCode(input, options?)`
+
+The one-shot forms, on the default scheme unless you pass options. Prefer `store.codes` in
+application code.
 
 ```ts
 createSyncCode() // "K7QP2M4X"
-createSyncCode(12) // 60 bits
-```
-
-## `normalizeSyncCode(input)`
-
-Turns what someone typed into the canonical code: uppercase, spaces and dashes dropped, `O` folded
-to zero and `I`/`L` to one. Throws `INVALID_SYNC_CODE` on anything outside the alphabet.
-
-```ts
 normalizeSyncCode('k7-qp2m4x') // "K7QP2M4X"
 ```
 
-See [Sync codes](/docs/sync-codes).
+## `syncCodeAlphabets`
+
+`crockford` (the default), `digits`, and `alphanumeric`. Any string of your own works too.
 
 ---
 

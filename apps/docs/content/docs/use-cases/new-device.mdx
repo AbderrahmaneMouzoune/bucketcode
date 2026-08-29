@@ -23,13 +23,11 @@ export const SCHEMA_VERSION = 3
 
 ```ts
 // app/api/sync/route.ts
-import { createSyncCode } from 'bucketcode'
-
 import { store, SCHEMA_VERSION } from '@/lib/store'
 
 export async function POST(request: Request) {
   const state = await request.json()
-  const code = createSyncCode()
+  const code = store.codes.create()
 
   const result = await store.putSnapshot(code, state, {
     app: 'notes',
@@ -45,7 +43,7 @@ export async function POST(request: Request) {
 
 ```ts
 // app/api/sync/[code]/route.ts
-import { isBucketCodeError, normalizeSyncCode } from 'bucketcode'
+import { isBucketCodeError } from 'bucketcode'
 
 import { store, SCHEMA_VERSION } from '@/lib/store'
 
@@ -55,7 +53,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
   let normalized: string
 
   try {
-    normalized = normalizeSyncCode(code)
+    normalized = store.codes.normalize(code)
   } catch (error) {
     if (isBucketCodeError(error) && error.code === 'INVALID_SYNC_CODE') {
       return Response.json({ error: 'That does not look like a code' }, { status: 400 })
@@ -103,7 +101,7 @@ The transfer is over once the new device has the data. Nothing should still answ
 export async function DELETE(_request: Request, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
 
-  await store.delete(normalizeSyncCode(code))
+  await store.delete(store.codes.normalize(code))
 
   return new Response(null, { status: 204 })
 }

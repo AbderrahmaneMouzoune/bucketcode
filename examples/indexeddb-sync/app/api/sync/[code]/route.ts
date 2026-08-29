@@ -1,4 +1,4 @@
-import { isBucketCodeError, normalizeSyncCode } from 'bucketcode'
+import { isBucketCodeError } from 'bucketcode'
 
 import { store, SCHEMA_VERSION } from '@/lib/store'
 
@@ -9,7 +9,7 @@ interface Context {
 /** Turns what the user typed into a key, or into a 400. */
 function parse(code: string): { code: string } | { response: Response } {
   try {
-    return { code: normalizeSyncCode(code) }
+    return { code: store().codes.normalize(code) }
   } catch (error) {
     if (isBucketCodeError(error) && error.code === 'INVALID_SYNC_CODE') {
       return { response: Response.json({ error: 'That does not look like a code' }, { status: 400 }) }

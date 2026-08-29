@@ -75,10 +75,10 @@ With that, the tests read like the feature:
 it('carries the database to the other device', async () => {
   const bucket = memoryBucket()
 
-  const code = createSyncCode()
+  const code = store.codes.create()
   await store.putSnapshot(code, { notes: [{ id: 1, title: 'Roof' }] }, { version: 3 })
 
-  const restored = await store.getSnapshot(normalizeSyncCode(code.toLowerCase()), { maxVersion: 3 })
+  const restored = await store.getSnapshot(store.codes.normalize(code.toLowerCase()), { maxVersion: 3 })
 
   expect(restored?.data).toEqual({ notes: [{ id: 1, title: 'Roof' }] })
 })

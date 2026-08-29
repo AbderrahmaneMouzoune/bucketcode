@@ -14,6 +14,7 @@ import { BucketCodeError } from './errors.js'
 import { assertValidKey, encodeKey, generateKey, joinKey, normalizePrefix, sanitizeFilename } from './key.js'
 import { DEFAULT_CONTENT_TYPE, lookupContentType } from './mime.js'
 import { decodeSnapshot, encodeSnapshot, ENVELOPE_VERSION } from './snapshot.js'
+import { createSyncCodes } from './sync-code.js'
 import type {
   BucketConfig,
   GetOptions,
@@ -26,6 +27,7 @@ import type {
   SnapshotEnvelope,
   SnapshotResult,
   StoredFile,
+  SyncCodes,
   UploadBody,
   UploadOptions,
   UploadResult,
@@ -115,12 +117,20 @@ function contentDispositionFor(download: boolean | string | undefined): string |
 export class Bucket {
   readonly bucket: string
 
+  /**
+   * Creates and reads back the codes a person carries between devices, in the
+   * shape `syncCode` configured — so generation and normalization can never
+   * disagree about the alphabet.
+   */
+  readonly codes: SyncCodes
+
   private readonly config: ResolvedConfig
   private s3: S3Client | undefined
 
   constructor(config: BucketConfig = {}) {
     this.config = resolveConfig(config)
     this.bucket = this.config.bucket
+    this.codes = createSyncCodes(this.config.syncCode)
   }
 
   /** Underlying `S3Client`, created on first use. */

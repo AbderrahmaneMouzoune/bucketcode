@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   }
 
   // Keyed under the transfer, so cleanup is one prefix.
-  const result = await store.upload(file, { prefix: `attachments/${normalizeSyncCode(code)}` })
+  const result = await store.upload(file, { prefix: `attachments/${store.codes.normalize(code)}` })
 
   return Response.json({ key: result.key })
 }

@@ -16,6 +16,9 @@ export function store(): Bucket {
     // Under Vercel's 4.5 MB request limit, so an oversized database is a clean
     // 413 rather than a truncated request.
     maxSize: 4 * 1024 * 1024,
+    // The default scheme. Shorten it, or switch to digits, and `store.codes`
+    // generates and reads back the new shape without anything else changing.
+    syncCode: { length: 8 },
   })
 
   return cached

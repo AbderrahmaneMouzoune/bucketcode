@@ -1,11 +1,12 @@
-import { createSyncCode, isBucketCodeError } from 'bucketcode'
+import { isBucketCodeError } from 'bucketcode'
 
 import { store, CODE_TTL_SECONDS, SCHEMA_VERSION } from '@/lib/store'
 
 /** POST /api/sync — take this device's database and hand back a code for it. */
 export async function POST(request: Request) {
   const state = await request.json()
-  const code = createSyncCode()
+  // The scheme lives on the store, so this follows whatever lib/store.ts configured.
+  const code = store().codes.create()
 
   try {
     const result = await store().putSnapshot(code, state, {

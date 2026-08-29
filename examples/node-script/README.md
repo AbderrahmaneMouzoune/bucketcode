@@ -29,7 +29,7 @@ burned    gone
   the best case for gzip, and that ratio is what keeps a real database under your runtime's
   request limit.
 - **The typed code is deliberately messy.** Lowercase, with a dash, exactly what a person produces.
-  `normalizeSyncCode()` is what makes it find the object.
+  `store.codes.normalize()` is what makes it find the object.
 - **Both conditional writes are exercised.** `ifAbsent` is how you claim a code without trampling
   one in use; `ifMatch` is how a second device finds out it lost the race instead of silently
   discarding the first one's work. If your S3-compatible provider does not implement conditional

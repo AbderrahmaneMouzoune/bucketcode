@@ -3,16 +3,16 @@ import { codeToHtml } from 'shiki'
 
 import { repositoryUrl } from '@/lib/shared'
 
-const SAMPLE = `import { createBucket, createSyncCode, normalizeSyncCode } from 'bucketcode'
+const SAMPLE = `import { createBucket } from 'bucketcode'
 
 const store = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
 
 // On the old device: hand the user a code.
-const code = createSyncCode() // "K7QP2M4X"
+const code = store.codes.create() // "K7QP2M4X"
 await store.putSnapshot(code, state, { app: 'notes', version: 3, expiresIn: 3600 })
 
 // On the new device: they type it in.
-const snapshot = await store.getSnapshot(normalizeSyncCode(typed), { maxVersion: 3 })
+const snapshot = await store.getSnapshot(store.codes.normalize(typed), { maxVersion: 3 })
 snapshot?.data // → the state, ready to write back into IndexedDB`
 
 const USE_CASES = [

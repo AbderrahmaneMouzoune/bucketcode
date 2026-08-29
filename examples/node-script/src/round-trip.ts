@@ -1,4 +1,4 @@
-import { createBucket, createSyncCode, isBucketCodeError, normalizeSyncCode } from 'bucketcode'
+import { createBucket, isBucketCodeError } from 'bucketcode'
 
 /**
  * Exercises a transfer end to end against a real bucket: write a snapshot under
@@ -24,7 +24,7 @@ const state = {
   })),
 }
 
-const code = createSyncCode()
+const code = store.codes.create()
 
 try {
   const written = await store.putSnapshot(code, state, {
@@ -41,9 +41,9 @@ try {
 
   // The other device types it in lowercase, with a dash, and gets the same object.
   const typed = `${code.slice(0, 4)}-${code.slice(4)}`.toLowerCase()
-  const restored = await store.getSnapshot<typeof state>(normalizeSyncCode(typed), { maxVersion: 1 })
+  const restored = await store.getSnapshot<typeof state>(store.codes.normalize(typed), { maxVersion: 1 })
 
-  console.log(`typed     "${typed}" → ${normalizeSyncCode(typed)}`)
+  console.log(`typed     "${typed}" → ${store.codes.normalize(typed)}`)
   console.log(
     `restored  ${restored?.data.notes.length} notes from ${restored?.device}, written ${restored?.createdAt.toISOString()}`,
   )

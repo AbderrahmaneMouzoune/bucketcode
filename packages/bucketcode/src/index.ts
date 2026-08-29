@@ -1,6 +1,6 @@
 export { Bucket, createBucket } from './bucket.js'
 export { BucketCodeError, isBucketCodeError, type BucketCodeErrorCode } from './errors.js'
-export { createSyncCode, normalizeSyncCode } from './snapshot.js'
+export { createSyncCode, createSyncCodes, normalizeSyncCode, syncCodeAlphabets } from './sync-code.js'
 export type {
   BucketConfig,
   BucketCredentials,
@@ -13,6 +13,8 @@ export type {
   SnapshotEnvelope,
   SnapshotResult,
   StoredFile,
+  SyncCodeOptions,
+  SyncCodes,
   UploadBody,
   UploadOptions,
   UploadResult,

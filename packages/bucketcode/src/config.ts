@@ -58,6 +58,7 @@ export function resolveConfig(config: BucketConfig = {}): ResolvedConfig {
     publicUrl: normalizePublicUrl(config.publicUrl ?? env('BUCKETCODE_PUBLIC_URL', 'S3_PUBLIC_URL')),
     prefix: normalizePrefix(config.prefix),
     maxSize: config.maxSize,
+    syncCode: config.syncCode,
     client: config.client,
   }
 }

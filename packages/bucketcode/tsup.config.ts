@@ -9,4 +9,6 @@ export default defineConfig({
   treeshake: true,
   target: 'node20',
   platform: 'node',
+  // nanoid is ESM-only; bundling it keeps the CommonJS build usable.
+  noExternal: ['nanoid'],
 })

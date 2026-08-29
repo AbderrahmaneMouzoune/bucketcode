@@ -3,16 +3,16 @@
 Move a local-first app's data from one device to another, through your own bucket.
 
 ```ts
-import { createBucket, createSyncCode, normalizeSyncCode } from 'bucketcode'
+import { createBucket } from 'bucketcode'
 
 const store = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
 
 // On the old device: hand the user a code.
-const code = createSyncCode() // "K7QP2M4X"
+const code = store.codes.create() // "K7QP2M4X"
 await store.putSnapshot(code, state, { app: 'notes', version: 3, expiresIn: 3600 })
 
 // On the new device: they type it in.
-const snapshot = await store.getSnapshot(normalizeSyncCode(typed), { maxVersion: 3 })
+const snapshot = await store.getSnapshot(store.codes.normalize(typed), { maxVersion: 3 })
 snapshot?.data // → the state, ready to write back into IndexedDB
 ```
 
@@ -74,7 +74,7 @@ routinely cuts it by 5–10×. That is headroom against the request limit of wha
 // POST /api/sync — the device that has the data
 export async function POST(request: Request) {
   const state = await request.json()
-  const code = createSyncCode()
+  const code = store.codes.create()
 
   await store.putSnapshot(code, state, {
     app: 'notes',
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
 export async function GET(_request: Request, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
 
-  const snapshot = await store.getSnapshot(normalizeSyncCode(code), { maxVersion: SCHEMA_VERSION })
+  const snapshot = await store.getSnapshot(store.codes.normalize(code), { maxVersion: SCHEMA_VERSION })
 
   if (!snapshot) return Response.json({ error: 'Unknown or expired code' }, { status: 404 })
 
@@ -108,22 +108,47 @@ shows a complete one.
 
 ## Sync codes
 
-`createSyncCode()` produces a code from [Crockford base32](https://www.crockford.com/base32.html):
-no `I`, `L`, `O` or `U`, so it survives being read aloud, written on paper, or typed on a phone.
-Eight characters is the default — about 10¹² combinations.
+`store.codes` pairs code generation with the normalization that reads codes back, so the two can
+never disagree about the alphabet. Codes are generated with
+[nanoid](https://github.com/ai/nanoid).
 
-`normalizeSyncCode()` turns what someone typed into the canonical form: case is ignored, spaces
-and dashes are dropped, and the characters people confuse are folded — `O` reads as zero, `I` and
-`L` as one. Call it on user input before you look anything up.
+The default is eight characters of
+[Crockford base32](https://www.crockford.com/base32.html) — no `I`, `L`, `O` or `U`, so a code
+survives being read aloud, written on paper, or typed on a phone. Both halves are configurable:
 
 ```ts
-normalizeSyncCode('k7-qp2m4x') // → "K7QP2M4X"
-normalizeSyncCode('OIL5ABCD') // → "0115ABCD"
+import { createBucket, syncCodeAlphabets } from 'bucketcode'
+
+const store = createBucket({
+  bucket: 'my-bucket',
+  syncCode: { length: 4, alphabet: syncCodeAlphabets.digits },
+})
+
+store.codes.create() // "8143"
+store.codes.entropyBits // 13.29 — what it is worth guessing against
 ```
 
+`normalize()` canonicalizes what someone typed: separators dropped, case folded when the alphabet
+has a single case, and confusable characters repaired when the alphabet makes that unambiguous —
+`O` reads as zero only when there is no letter `O` to confuse it with. Call it on user input before
+you look anything up.
+
+```ts
+store.codes.normalize('k7-qp2m4x') // → "K7QP2M4X"
+store.codes.normalize('OIL5ABCD') // → "0115ABCD"
+```
+
+`createSyncCodes()`, `createSyncCode()` and `normalizeSyncCode()` are exported for use outside a
+store; prefer `store.codes` in application code, since configuring the shape in one place is what
+keeps the two sides in agreement.
+
 **A sync code is a bearer token.** Anyone who has it can read that snapshot. Give it a short
-`expiresIn`, and if the data is sensitive, encrypt it in the browser before it ever reaches your
-server — `putSnapshot()` stores whatever you hand it, ciphertext included.
+`expiresIn` and rate-limit the lookup route — the shorter the code, the more that rate limit is
+doing the work. If the data is sensitive, encrypt it in the browser before it ever reaches your
+server: `putSnapshot()` stores whatever you hand it, ciphertext included.
+
+Burning a code after a successful restore is a good habit, and there is no separate call for it:
+`store.delete(code)` is the whole of it.
 
 ## Two devices, one snapshot
 

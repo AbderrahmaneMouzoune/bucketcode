@@ -19,9 +19,13 @@ one device to another.
   **and** for one past its `expiresAt`, which is never handed over even while the object is still
   in the bucket. `maxVersion` makes a snapshot from a newer build throw `SNAPSHOT_TOO_NEW` rather
   than land in an app that would misread it.
-- `createSyncCode()` and `normalizeSyncCode()` produce and accept a code a person can read off one
-  screen and type into another: Crockford base32, no `I`, `L`, `O` or `U`, and folded on the way
-  back in so `k7-qp2m4x` and `K7QP2M4X` find the same snapshot.
+- `store.codes` produces and accepts the code a person carries between devices, in whatever shape
+  `syncCode` configures — length and alphabet both, so an app that wants four digits gets four
+  digits. Codes come from [nanoid](https://github.com/ai/nanoid); the default is eight characters
+  of Crockford base32. Normalization is paired with generation so the two cannot disagree about the
+  alphabet: separators dropped, case folded when the alphabet has a single case, and confusable
+  characters repaired only when the alphabet makes that unambiguous. `createSyncCodes()`,
+  `createSyncCode()` and `normalizeSyncCode()` are exported for use outside a store.
 - `ifMatch` and `ifAbsent` turn a concurrent write from silent data loss into
   `PRECONDITION_FAILED`. That is what makes a per-account backup safe when two devices push.
 

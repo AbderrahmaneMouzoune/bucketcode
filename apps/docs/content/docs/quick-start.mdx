@@ -21,6 +21,10 @@ export const store = createBucket({
 export const SCHEMA_VERSION = 3
 ```
 
+Codes come from `store.codes`, in whatever shape `syncCode` configures — eight Crockford base32
+characters unless you say otherwise. Configuring it on the store is what keeps generation and
+normalization agreeing about the alphabet. See [Sync codes](/docs/sync-codes).
+
 `createBucket()` is cheap — the underlying `S3Client` is built on the first request — so calling
 it at module scope is fine. `maxSize` set below your platform's request limit turns an oversized
 snapshot into a clean 413 rather than a truncated request.
@@ -29,13 +33,11 @@ snapshot into a clean 413 rather than a truncated request.
 
 ```ts
 // app/api/sync/route.ts
-import { createSyncCode } from 'bucketcode'
-
 import { store, SCHEMA_VERSION } from '@/lib/store'
 
 export async function POST(request: Request) {
   const state = await request.json()
-  const code = createSyncCode()
+  const code = store.codes.create()
 
   await store.putSnapshot(code, state, {
     app: 'notes',
@@ -58,14 +60,12 @@ stranger's snapshot.
 
 ```ts
 // app/api/sync/[code]/route.ts
-import { normalizeSyncCode } from 'bucketcode'
-
 import { store, SCHEMA_VERSION } from '@/lib/store'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
 
-  const snapshot = await store.getSnapshot(normalizeSyncCode(code), { maxVersion: SCHEMA_VERSION })
+  const snapshot = await store.getSnapshot(store.codes.normalize(code), { maxVersion: SCHEMA_VERSION })
 
   if (!snapshot) {
     return Response.json({ error: 'Unknown or expired code' }, { status: 404 })
@@ -79,8 +79,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
 }
 ```
 
-`normalizeSyncCode()` is what makes a typed code work: it uppercases, drops spaces and dashes, and
-folds the characters people misread. Call it on user input, always.
+`store.codes.normalize()` is what makes a typed code work: it drops separators, folds case, and
+repairs the characters people misread. Call it on user input, always.
 
 `getSnapshot()` returns `null` for a code that was never used _and_ for one that has expired — the
 receiving device does not need to tell those apart. `maxVersion` makes a snapshot from a newer

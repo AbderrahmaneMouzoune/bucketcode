@@ -50,8 +50,9 @@ most schemas and subtly wrong for the rest.
 ## Worth noticing
 
 - **The code is shown grouped in fours**, because someone has to read it off one screen and type
-  it into another. `normalizeSyncCode()` on the server accepts it with or without the spaces, in
-  any case, and folds `O` to zero and `I`/`L` to one.
+  it into another. `store.codes.normalize()` on the server accepts it with or without the spaces,
+  in any case, and folds `O` to zero and `I`/`L` to one. Change `syncCode` in `lib/store.ts` — to
+  four digits, say — and both halves follow.
 - **Nothing is imported before the user confirms.** Looking a code up fetches the snapshot and
   shows what it holds — how many notes, from which device, saved when — and only then offers to
   replace what is there. The most common mistake is restoring onto the device that already had the
