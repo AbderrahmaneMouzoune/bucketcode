@@ -1,0 +1,165 @@
+---
+title: 'Move to a new device'
+description: 'A code on the old phone, typed into the new one. The whole database follows.'
+---
+
+The flagship case. The user has a new phone, the app on the old one holds everything, and there is
+no account to sign into. They read a code off one screen and type it into the other.
+
+## The server
+
+```ts
+// lib/store.ts
+import { createBucket } from 'bucketcode'
+
+export const store = createBucket({
+  bucket: process.env.S3_BUCKET,
+  prefix: 'transfers',
+  maxSize: 4 * 1024 * 1024,
+})
+
+export const SCHEMA_VERSION = 3
+```
+
+```ts
+// app/api/sync/route.ts
+import { createSyncCode } from 'bucketcode'
+
+import { store, SCHEMA_VERSION } from '@/lib/store'
+
+export async function POST(request: Request) {
+  const state = await request.json()
+  const code = createSyncCode()
+
+  const result = await store.putSnapshot(code, state, {
+    app: 'notes',
+    version: SCHEMA_VERSION,
+    device: request.headers.get('user-agent') ?? undefined,
+    expiresIn: 60 * 60,
+    ifAbsent: true,
+  })
+
+  return Response.json({ code, expiresAt: result.expiresAt })
+}
+```
+
+```ts
+// app/api/sync/[code]/route.ts
+import { isBucketCodeError, normalizeSyncCode } from 'bucketcode'
+
+import { store, SCHEMA_VERSION } from '@/lib/store'
+
+export async function GET(_request: Request, { params }: { params: Promise<{ code: string }> }) {
+  const { code } = await params
+
+  let normalized: string
+
+  try {
+    normalized = normalizeSyncCode(code)
+  } catch (error) {
+    if (isBucketCodeError(error) && error.code === 'INVALID_SYNC_CODE') {
+      return Response.json({ error: 'That does not look like a code' }, { status: 400 })
+    }
+
+    throw error
+  }
+
+  const snapshot = await store.getSnapshot(normalized, { maxVersion: SCHEMA_VERSION })
+
+  if (!snapshot) {
+    return Response.json({ error: 'Unknown or expired code' }, { status: 404 })
+  }
+
+  return Response.json({
+    data: snapshot.data,
+    createdAt: snapshot.createdAt,
+    device: snapshot.device,
+    version: snapshot.version,
+  })
+}
+```
+
+Returning `createdAt` and `device` is what turns a scary prompt into an informed one. The receiving
+device can say _"Restore from Pixel 8, saved 4 minutes ago?"_ instead of _"Restore?"_.
+
+## Rate-limit the lookup
+
+The code is the only thing standing between a stranger and that snapshot. Without a limit on the
+GET route, an attacker gets unlimited guesses; with one, forty bits stops being brute-forceable in
+any useful time. Use whatever your platform gives you — a KV counter keyed by IP is enough:
+
+```ts
+const attempts = await kv.incr(`sync-attempts:${ip}`)
+if (attempts === 1) await kv.expire(`sync-attempts:${ip}`, 60)
+if (attempts > 10) return new Response('Too many attempts', { status: 429 })
+```
+
+## Burn the code after use
+
+The transfer is over once the new device has the data. Nothing should still answer to that code:
+
+```ts
+// app/api/sync/[code]/route.ts
+export async function DELETE(_request: Request, { params }: { params: Promise<{ code: string }> }) {
+  const { code } = await params
+
+  await store.delete(normalizeSyncCode(code))
+
+  return new Response(null, { status: 204 })
+}
+```
+
+Have the client call it after a successful import. The `expiresIn` is the backstop for when it
+does not — a closed tab, a failed import, a user who changed their mind.
+
+## The client
+
+```ts
+export async function sendToOtherDevice(): Promise<string> {
+  const state = await exportDatabase()
+
+  const response = await fetch('/api/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(state),
+  })
+
+  if (!response.ok) throw new Error('Could not prepare the transfer')
+
+  return (await response.json()).code
+}
+
+export async function restoreFromCode(typed: string) {
+  const response = await fetch(`/api/sync/${encodeURIComponent(typed.trim())}`)
+
+  if (!response.ok) throw new Error((await response.json()).error)
+
+  const { data, createdAt, device } = await response.json()
+
+  await importDatabase(data) // replaces this device's state
+
+  await fetch(`/api/sync/${encodeURIComponent(typed.trim())}`, { method: 'DELETE' })
+
+  return { createdAt: new Date(createdAt), device }
+}
+```
+
+**Confirm before importing.** A restore replaces what is on the receiving device. Show what is
+about to arrive, and let the user say no — especially since the most common mistake is running the
+restore on the phone that already had the data.
+
+A complete version, with a real IndexedDB store behind `exportDatabase` and `importDatabase`, is
+in [examples/indexeddb-sync](https://github.com/AbderrahmaneMouzoune/bucketcode/tree/main/examples/indexeddb-sync).
+
+## Show the code well
+
+The code is read by a human off one screen and typed into another, so present it that way: large,
+monospaced, grouped in fours, with a copy button and the expiry visible.
+
+```tsx
+<output className="code">{code.match(/.{1,4}/g)?.join(' ')}</output>
+<p>Expires in an hour. Type it into the app on your other device.</p>
+```
+
+A QR code encoding the deep link removes the typing entirely on phones — and the typed code stays
+as the fallback for when the camera is not an option.

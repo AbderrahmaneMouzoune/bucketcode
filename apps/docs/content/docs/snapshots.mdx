@@ -1,0 +1,134 @@
+---
+title: 'Snapshots'
+description: 'The envelope, compression, schema versions and expiry.'
+---
+
+A snapshot is your application's local state at a point in time, wrapped in an envelope that says
+what it is.
+
+```ts
+await store.putSnapshot('K7QP2M4X', state, { app: 'notes', version: 3, device: 'Pixel 8' })
+```
+
+## The envelope
+
+What actually lands in the bucket, before gzip:
+
+```jsonc
+{
+  "bucketcode": 1, // envelope format — bucketcode's, not your data's
+  "app": "notes",
+  "version": 3, // your schema version
+  "device": "Pixel 8",
+  "createdAt": "2026-08-27T12:00:00.000Z",
+  "expiresAt": "2026-08-27T13:00:00.000Z",
+  "data": {/* whatever you passed */},
+}
+```
+
+Every field but `bucketcode`, `createdAt` and `data` is optional, and every one of them earns its
+place on the receiving side:
+
+- `app` catches the case where a code from one of your products is typed into another.
+- `version` is what lets a restore refuse data it cannot read. See below.
+- `device` and `createdAt` are what you show the user before overwriting their database:
+  _"Restore 214 notes from Pixel 8, saved 6 minutes ago?"_ is a very different prompt from
+  _"Restore?"_.
+
+## Compression
+
+`putSnapshot()` gzips by default. This is not a micro-optimisation: an IndexedDB dump is
+repetitive JSON — the same keys on every record — and gzip routinely cuts it by 5 to 10×. That
+compression is most of what keeps a real database under the request limit of whatever runs your
+API.
+
+```ts
+await store.putSnapshot(code, state, { compress: false }) // stores readable JSON
+```
+
+Turn it off when you want to be able to read the object straight out of the bucket while
+debugging. `getSnapshot()` detects which one it is reading, so both round-trip and you can change
+your mind without migrating anything.
+
+## Schema versions
+
+Pass your own schema version on write, and the highest one this build understands on read:
+
+```ts
+await store.putSnapshot(code, state, { version: SCHEMA_VERSION })
+
+const snapshot = await store.getSnapshot(code, { maxVersion: SCHEMA_VERSION })
+```
+
+A snapshot written by a **newer** build throws `SNAPSHOT_TOO_NEW`. That is the dangerous direction:
+the user updated the app on their laptop, sent a snapshot, and the phone still runs last month's
+build. Without the check, that phone reads fields it does not know about, drops them, and writes
+the truncated version back — data loss that looks like a successful restore.
+
+The other direction is yours to handle. A snapshot at version 1 arriving in a version 3 app is an
+ordinary migration; run the same upgrade path you already run against a local database.
+
+```ts
+const snapshot = await store.getSnapshot(code, { maxVersion: SCHEMA_VERSION })
+
+if (snapshot && snapshot.version !== SCHEMA_VERSION) {
+  snapshot.data = migrate(snapshot.data, snapshot.version ?? 0, SCHEMA_VERSION)
+}
+```
+
+## Expiry
+
+```ts
+await store.putSnapshot(code, state, { expiresIn: 60 * 60 })
+```
+
+After that, `getSnapshot()` returns `null` — the same answer as a code that was never used, which
+is exactly what you want to tell the user. An expired snapshot is **never** handed over, even
+while the object is still in the bucket.
+
+bucketcode does not delete it. Removing the object is a job for an S3 lifecycle rule on the
+prefix, which runs server-side, costs nothing, and keeps working when your application is not:
+
+```jsonc
+{
+  "Rules": [
+    {
+      "ID": "expire-transfer-snapshots",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "snapshots/" },
+      "Expiration": { "Days": 1 },
+    },
+  ],
+}
+```
+
+There is no default expiry. A transfer code should have a short one; a per-account backup should
+have none. Since bucketcode cannot tell which you are doing, it does not guess — passing
+`expiresIn` on a transfer is your job.
+
+## Reading one back
+
+```ts
+const snapshot = await store.getSnapshot<AppState>(code, { maxVersion: SCHEMA_VERSION })
+```
+
+`getSnapshot` is generic, so `snapshot.data` comes back as your own type rather than `unknown`.
+That is a convenience, not a validation — nothing checks the bytes against that type. If the
+snapshot can come from an older build of your app, or from anywhere you do not fully control,
+parse it before you trust it.
+
+| Field                      |                                                                                    |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| `data`                     | What you passed to `putSnapshot()`.                                                |
+| `app`, `version`, `device` | Whatever was stamped on write.                                                     |
+| `createdAt`, `expiresAt`   | `Date` objects.                                                                    |
+| `etag`                     | Pass it back as `ifMatch` on the next write. See [two devices](/docs/two-devices). |
+| `size`                     | Stored size, after compression.                                                    |
+| `key`, `path`, `bucket`    | Where it lives.                                                                    |
+
+## Snapshots are not a sync engine
+
+Restoring replaces the receiving device's state wholesale. There is no per-record merge, and
+nothing reconciles two divergent databases. For "move my data to my new phone" that is the correct
+and simplest model. For "two people edit the same list at the same time" it is not — reach for a
+CRDT, and use bucketcode to store its state if you like.

@@ -5,14 +5,14 @@ Move a local-first app's data from one device to another, through your own bucke
 ```ts
 import { createBucket, createSyncCode, normalizeSyncCode } from 'bucketcode'
 
-const bucket = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
+const store = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
 
 // On the old device: hand the user a code.
 const code = createSyncCode() // "K7QP2M4X"
-await bucket.putSnapshot(code, state, { app: 'notes', version: 3, expiresIn: 3600 })
+await store.putSnapshot(code, state, { app: 'notes', version: 3, expiresIn: 3600 })
 
 // On the new device: they type it in.
-const snapshot = await bucket.getSnapshot(normalizeSyncCode(typed), { maxVersion: 3 })
+const snapshot = await store.getSnapshot(normalizeSyncCode(typed), { maxVersion: 3 })
 snapshot?.data // → the state, ready to write back into IndexedDB
 ```
 

@@ -1,0 +1,242 @@
+---
+title: 'API'
+description: 'createBucket, upload, put, get, getUrl, delete, destroy.'
+---
+
+The snapshot API is the one most applications use. The file API underneath it stays available for
+everything that is not a snapshot — attachments, exports, avatars.
+
+## `createBucket(config?)`
+
+Returns a `Bucket`. Cheap: the underlying `S3Client` is built on the first request, so calling it
+at module scope is fine. See [Configuration](/docs/configuration) for every option.
+
+```ts
+const store = createBucket({ bucket: 'my-bucket', region: 'eu-west-3' })
+```
+
+`new Bucket(config)` is equivalent, and exported for when you want to subclass or type against it.
+
+---
+
+## `putSnapshot(key, data, options?)`
+
+Stores a snapshot of an application's local state. The value is wrapped in a self-describing
+envelope, serialized as JSON and gzipped. See [Snapshots](/docs/snapshots).
+
+```ts
+const result = await store.putSnapshot(code, state, { app: 'notes', version: 3, expiresIn: 3600 })
+```
+
+| Option      | Type               | Default                                       |
+| ----------- | ------------------ | --------------------------------------------- |
+| `app`       | `string`           | — stamped in the envelope                     |
+| `version`   | `number`           | — your schema version                         |
+| `device`    | `string`           | — free label for the writing device           |
+| `expiresIn` | `number` (seconds) | — no expiry                                   |
+| `compress`  | `boolean`          | `true`                                        |
+| `ifMatch`   | `string`           | — write only if the stored ETag still matches |
+| `ifAbsent`  | `boolean`          | — write only if nothing is stored yet         |
+| `prefix`    | `string`           | the bucket-level `prefix`                     |
+| `signal`    | `AbortSignal`      | —                                             |
+
+Returns `{ bucket, key, path, etag?, size?, compressed, createdAt, expiresAt? }`. Keep the `etag`
+when another device may write the same key — see [two devices](/docs/two-devices).
+
+Throws `INVALID_SNAPSHOT` when the data is not JSON-serializable, and `PRECONDITION_FAILED` when
+an `ifMatch` or `ifAbsent` write loses the race.
+
+---
+
+## `getSnapshot(key, options?)`
+
+Reads a snapshot back, or `null` when there is none — including one past its `expiresAt`, which is
+never handed over even while the object is still in the bucket.
+
+```ts
+const snapshot = await store.getSnapshot<AppState>(code, { maxVersion: SCHEMA_VERSION })
+```
+
+| Option       | Type                                          |
+| ------------ | --------------------------------------------- |
+| `maxVersion` | `number` — throws `SNAPSHOT_TOO_NEW` above it |
+| `prefix`     | `string`                                      |
+| `signal`     | `AbortSignal`                                 |
+
+| Field                   | Type                                      |
+| ----------------------- | ----------------------------------------- |
+| `data`                  | `T` — the generic you passed, unvalidated |
+| `app`, `device`         | `string \| undefined`                     |
+| `version`               | `number \| undefined`                     |
+| `createdAt`             | `Date`                                    |
+| `expiresAt`             | `Date \| undefined`                       |
+| `etag`, `size`          | `string` / `number`, when S3 reports them |
+| `bucket`, `key`, `path` | `string`                                  |
+
+Compression is detected rather than assumed, so a snapshot written with `compress: false` reads
+back the same way.
+
+---
+
+## `createSyncCode(length?)`
+
+A short, unambiguous code from [Crockford base32](https://www.crockford.com/base32.html). Defaults
+to eight characters; accepts 4 to 32.
+
+```ts
+createSyncCode() // "K7QP2M4X"
+createSyncCode(12) // 60 bits
+```
+
+## `normalizeSyncCode(input)`
+
+Turns what someone typed into the canonical code: uppercase, spaces and dashes dropped, `O` folded
+to zero and `I`/`L` to one. Throws `INVALID_SYNC_CODE` on anything outside the alphabet.
+
+```ts
+normalizeSyncCode('k7-qp2m4x') // "K7QP2M4X"
+```
+
+See [Sync codes](/docs/sync-codes).
+
+---
+
+## `upload(body, options?)`
+
+Uploads a body in a single `PutObject`. Writing to a key that already exists replaces it — S3 has
+no separate update call.
+
+```ts
+const result = await store.upload(file, { prefix: 'invoices' })
+```
+
+`body` accepts a `string`, `Buffer`, `Uint8Array`, `ArrayBuffer`, typed array, `Blob`, `File`,
+Node `Readable` or web `ReadableStream`.
+
+| Option               | Type                     | Default                                                                           |
+| -------------------- | ------------------------ | --------------------------------------------------------------------------------- |
+| `key`                | `string`                 | generated: `<uuid>-<filename>`                                                    |
+| `prefix`             | `string`                 | the bucket-level `prefix`                                                         |
+| `filename`           | `string`                 | the `File` name, when there is one                                                |
+| `contentType`        | `string`                 | the `File` type, else guessed from the extension, else `application/octet-stream` |
+| `contentLength`      | `number`                 | the body size — **required for streams**                                          |
+| `cacheControl`       | `string`                 | —                                                                                 |
+| `contentDisposition` | `string`                 | —                                                                                 |
+| `metadata`           | `Record<string, string>` | —                                                                                 |
+| `acl`                | `ObjectCannedACL`        | — (most buckets block ACLs; prefer a bucket policy)                               |
+| `ifMatch`            | `string`                 | — write only if the stored ETag still matches                                     |
+| `ifAbsent`           | `boolean`                | — write only if nothing is stored yet                                             |
+| `signal`             | `AbortSignal`            | —                                                                                 |
+
+Returns:
+
+```ts
+{
+  bucket: string
+  key: string          // the handle: pass it back to get/getUrl/delete
+  path: string         // full object key in the bucket, prefix included
+  contentType: string
+  size?: number
+  etag?: string        // quotes stripped
+  url?: string         // only when `publicUrl` is configured
+}
+```
+
+When the body carries a filename — a `File`, or an explicit `filename` option — it is stored as
+user metadata so `get()` can hand it back later.
+
+---
+
+## `put(id, body, options?)`
+
+`upload(body, { key: id })`, with the identifier first because that reads better when one
+identifier owns one file. Same options minus `key`, same result.
+
+```ts
+await store.put('XK5892', file)
+```
+
+Writing to an id that already holds a file replaces it.
+
+---
+
+## `get(key, options?)`
+
+Reads a stored file back. Returns `null` when the key does not exist. For a snapshot use
+`getSnapshot()`, which unwraps the envelope for you.
+
+```ts
+const file = await store.get('XK5892')
+```
+
+Accepts `{ signal }` to abort.
+
+| Field                   | Type                                                             |
+| ----------------------- | ---------------------------------------------------------------- |
+| `bucket`, `key`, `path` | `string`                                                         |
+| `contentType`           | `string`                                                         |
+| `filename`              | `string \| undefined` — the name it was uploaded with            |
+| `size`                  | `number \| undefined`                                            |
+| `etag`                  | `string \| undefined`                                            |
+| `lastModified`          | `Date \| undefined`                                              |
+| `metadata`              | `Record<string, string>` — raw S3 user metadata, keys lowercased |
+| `body`                  | `Readable`                                                       |
+| `bytes()`               | `Promise<Uint8Array>`                                            |
+| `text()`                | `Promise<string>`                                                |
+
+The body can only be read once. Use `body`, `bytes()` **or** `text()` — exactly one of them.
+
+---
+
+## `getUrl(key, options?)`
+
+Returns the public URL when `publicUrl` is configured, a presigned `GET` otherwise. Signing is
+local: no network round-trip, no extra S3 permission.
+
+```ts
+await store.getUrl('invoices/2026-01.pdf', { expiresIn: 300, download: 'Invoice January.pdf' })
+```
+
+| Option      | Type                             | Default                                                                          |
+| ----------- | -------------------------------- | -------------------------------------------------------------------------------- |
+| `expiresIn` | `number` (seconds, max `604800`) | `3600`                                                                           |
+| `signed`    | `boolean`                        | `true` unless `publicUrl` is set                                                 |
+| `download`  | `boolean \| string`              | — sets `Content-Disposition: attachment`, with a filename when you pass a string |
+
+`download` only applies to signed URLs: the disposition rides in the signed query string. For a
+public URL, set `contentDisposition` at upload time instead.
+
+---
+
+## `delete(key)`
+
+```ts
+await store.delete('uploads/a.png')
+await store.delete(['uploads/a.png', 'uploads/b.png']) // batched, 1000 keys per request
+```
+
+Deleting a key that does not exist is a no-op, not an error — the same semantics as S3 itself.
+Passing an array batches into `DeleteObjects` calls of 1000 keys; if S3 reports per-key failures,
+`delete()` throws `DELETE_FAILED` naming them.
+
+---
+
+## `store.client`
+
+The underlying `S3Client`, created on first access. Use it for anything bucketcode does not cover:
+
+```ts
+import { ListObjectsV2Command } from '@aws-sdk/client-s3'
+
+const response = await store.client.send(new ListObjectsV2Command({ Bucket: store.bucket, Prefix: 'uploads/' }))
+```
+
+## `store.destroy()`
+
+Releases the HTTP sockets of the client bucketcode created. Optional in a long-lived server; useful
+in a script that should exit promptly. A client you passed in through `config.client` is left
+alone — it is yours to close.
+
+## `BucketCodeError` and `isBucketCodeError(error)`
+
+See [Errors](/docs/errors).

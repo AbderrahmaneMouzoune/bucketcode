@@ -6,7 +6,7 @@ import { createBucket, createSyncCode, isBucketCodeError, normalizeSyncCode } fr
  * conditional writes work, then clean up. Point it at a local MinIO and it costs
  * nothing to run.
  */
-const bucket = createBucket({
+const store = createBucket({
   bucket: process.env.S3_BUCKET,
   region: process.env.AWS_REGION,
   endpoint: process.env.S3_ENDPOINT,
@@ -27,7 +27,7 @@ const state = {
 const code = createSyncCode()
 
 try {
-  const written = await bucket.putSnapshot(code, state, {
+  const written = await store.putSnapshot(code, state, {
     app: 'round-trip',
     version: 1,
     device: 'node-script',
@@ -41,7 +41,7 @@ try {
 
   // The other device types it in lowercase, with a dash, and gets the same object.
   const typed = `${code.slice(0, 4)}-${code.slice(4)}`.toLowerCase()
-  const restored = await bucket.getSnapshot<typeof state>(normalizeSyncCode(typed), { maxVersion: 1 })
+  const restored = await store.getSnapshot<typeof state>(normalizeSyncCode(typed), { maxVersion: 1 })
 
   console.log(`typed     "${typed}" → ${normalizeSyncCode(typed)}`)
   console.log(
@@ -51,23 +51,23 @@ try {
 
   // A second device claiming the same code loses.
   try {
-    await bucket.putSnapshot(code, state, { ifAbsent: true })
+    await store.putSnapshot(code, state, { ifAbsent: true })
     console.log('claim     UNEXPECTED: the second claim succeeded')
   } catch (error) {
     console.log(`claim     rejected as ${isBucketCodeError(error) ? error.code : 'unknown'}`)
   }
 
   // A write based on a stale read loses too.
-  await bucket.putSnapshot(code, { notes: [] })
+  await store.putSnapshot(code, { notes: [] })
   try {
-    await bucket.putSnapshot(code, { notes: [] }, { ifMatch: written.etag })
+    await store.putSnapshot(code, { notes: [] }, { ifMatch: written.etag })
     console.log('ifMatch   UNEXPECTED: the stale write succeeded')
   } catch (error) {
     console.log(`ifMatch   rejected as ${isBucketCodeError(error) ? error.code : 'unknown'}`)
   }
 
-  await bucket.delete(code)
-  console.log(`burned    ${(await bucket.getSnapshot(code)) === null ? 'gone' : 'still there'}`)
+  await store.delete(code)
+  console.log(`burned    ${(await store.getSnapshot(code)) === null ? 'gone' : 'still there'}`)
 } catch (error) {
   if (isBucketCodeError(error)) {
     console.error(`${error.code}: ${error.message}`)
@@ -76,5 +76,5 @@ try {
     throw error
   }
 } finally {
-  bucket.destroy()
+  store.destroy()
 }

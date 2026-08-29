@@ -1,0 +1,27 @@
+{
+  "title": "Documentation",
+  "root": true,
+  "pages": [
+    "---Getting started---",
+    "index",
+    "installation",
+    "quick-start",
+    "---Core concepts---",
+    "snapshots",
+    "sync-codes",
+    "two-devices",
+    "---Guides---",
+    "configuration",
+    "providers",
+    "limits",
+    "errors",
+    "testing",
+    "---Use cases---",
+    "use-cases/new-device",
+    "use-cases/continuous-backup",
+    "use-cases/encrypted-sync",
+    "use-cases/attachments",
+    "---Reference---",
+    "api"
+  ]
+}

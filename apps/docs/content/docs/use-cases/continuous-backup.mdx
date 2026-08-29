@@ -1,0 +1,137 @@
+---
+title: 'Continuous backup'
+description: 'One snapshot per account, rewritten as the local database changes.'
+---
+
+Once your app has accounts, the transfer code stops being the right shape. There is a session, so
+the server already knows who is asking — the snapshot can be keyed by user id and rewritten as the
+local database changes.
+
+This is what turns "my data lives in this browser" into "my data survives losing this laptop".
+
+## Keyed by account, not by code
+
+```ts
+// app/api/backup/route.ts
+import { auth } from '@/lib/auth'
+import { store, SCHEMA_VERSION } from '@/lib/store'
+
+export async function PUT(request: Request) {
+  const session = await auth()
+  if (!session) return new Response('Unauthorized', { status: 401 })
+
+  const state = await request.json()
+
+  const result = await store.putSnapshot(`user-${session.userId}`, state, {
+    app: 'notes',
+    version: SCHEMA_VERSION,
+    device: request.headers.get('user-agent') ?? undefined,
+  })
+
+  return Response.json({ savedAt: result.createdAt, etag: result.etag })
+}
+
+export async function GET() {
+  const session = await auth()
+  if (!session) return new Response('Unauthorized', { status: 401 })
+
+  const snapshot = await store.getSnapshot(`user-${session.userId}`, { maxVersion: SCHEMA_VERSION })
+
+  if (!snapshot) return Response.json({ data: null })
+
+  return Response.json({
+    data: snapshot.data,
+    createdAt: snapshot.createdAt,
+    device: snapshot.device,
+    etag: snapshot.etag,
+  })
+}
+```
+
+No `expiresIn` here. A backup that quietly stops answering is not a backup — put these under their
+own prefix so a lifecycle rule written for transfer codes cannot reach them.
+
+## Two devices will race
+
+The laptop and the phone both write to `user-42`, and S3's default is last-write-wins: the laptop's
+work disappears with no error. Pass the ETag you read as `ifMatch` and the losing write fails
+instead:
+
+```ts
+const current = await store.getSnapshot<AppState>(`user-${session.userId}`)
+
+try {
+  await store.putSnapshot(`user-${session.userId}`, state, { ifMatch: current?.etag })
+} catch (error) {
+  if (isBucketCodeError(error) && error.code === 'PRECONDITION_FAILED') {
+    return Response.json({ error: 'Updated on another device', etag: current?.etag }, { status: 409 })
+  }
+
+  throw error
+}
+```
+
+Have the client send back the ETag it last saw, so the 409 reaches the person who can decide.
+[Two devices, one snapshot](/docs/two-devices) covers the retry loop and where merging gets hard.
+
+## When to write
+
+Not on every keystroke. A snapshot is the whole database, so writing it is proportional to the
+data, not to the edit.
+
+- **Debounce.** Thirty seconds of silence after the last change is a good default.
+- **On page hide.** `visibilitychange` to `hidden` is the closest thing to a reliable "the user is
+  leaving" signal; `beforeunload` is not.
+- **Skip no-ops.** Keep a dirty flag from your write path, and do nothing when nothing changed.
+
+```ts
+let dirty = false
+let timer: ReturnType<typeof setTimeout> | undefined
+
+export function markDirty() {
+  dirty = true
+  clearTimeout(timer)
+  timer = setTimeout(backup, 30_000)
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && dirty) void backup()
+})
+
+async function backup() {
+  if (!dirty) return
+  dirty = false
+
+  try {
+    await fetch('/api/backup', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(await exportDatabase()),
+    })
+  } catch {
+    dirty = true // try again on the next trigger
+  }
+}
+```
+
+Restoring the flag on failure matters: an offline app should not decide it has been backed up
+because the request failed.
+
+## Keeping history
+
+One key per account means one version. If you want to be able to go back a few days, write a dated
+key alongside the current one:
+
+```ts
+const day = new Date().toISOString().slice(0, 10)
+
+await store.putSnapshot(`user-${session.userId}`, state)
+await store.putSnapshot(`history/user-${session.userId}/${day}`, state)
+```
+
+One object per day, overwritten as the day goes on, and a lifecycle rule on `history/` that expires
+after thirty. Cheap, and it turns "I deleted everything by accident" from a support ticket into a
+button.
+
+S3 bucket versioning does something similar without the second write — but it keeps every version
+of every object, which is a blunter instrument and a larger bill.

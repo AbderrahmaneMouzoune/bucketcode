@@ -1,0 +1,135 @@
+---
+title: 'Attachments beside the data'
+description: 'The blobs an IndexedDB app holds, carried across with the records that point at them.'
+---
+
+IndexedDB stores `Blob`s natively, so local-first apps end up holding images, recordings and PDFs
+alongside their records. Those do not belong inside a snapshot: JSON cannot hold binary, base64
+inflates it by a third, and the result is incompressible — three ways to hit
+[the size ceiling](/docs/limits) at once.
+
+Store them as objects, and let the snapshot carry references.
+
+## The shape
+
+```ts
+// The snapshot holds records that point at keys, not bytes.
+{
+  notes: [
+    { id: 1, title: 'Roof', attachments: ['K7QP2M4X/a1b2c3'] },
+  ],
+}
+```
+
+The file API underneath the snapshot API is exactly what this needs:
+
+```ts
+// app/api/sync/attachment/route.ts
+export async function POST(request: Request) {
+  const form = await request.formData()
+  const file = form.get('file')
+  const code = form.get('code')
+
+  if (!(file instanceof File) || typeof code !== 'string') {
+    return Response.json({ error: 'Missing file or code' }, { status: 400 })
+  }
+
+  // Keyed under the transfer, so cleanup is one prefix.
+  const result = await store.upload(file, { prefix: `attachments/${normalizeSyncCode(code)}` })
+
+  return Response.json({ key: result.key })
+}
+```
+
+`upload()` generates a collision-free key, detects the content type from the `File`, and keeps its
+original filename in metadata — which `get()` hands back on the other side.
+
+## Getting them to the other device
+
+Two ways, and the choice is about who serves the bytes.
+
+**Presigned URLs.** The receiving device downloads straight from S3, so your runtime never touches
+a byte:
+
+```ts
+export async function GET(_request: Request, { params }: { params: Promise<{ key: string }> }) {
+  const { key } = await params
+
+  return Response.json({ url: await store.getUrl(key, { expiresIn: 300 }) })
+}
+```
+
+```ts
+for (const key of note.attachments) {
+  const { url } = await fetch(`/api/sync/attachment/${encodeURIComponent(key)}`).then((r) => r.json())
+  const blob = await fetch(url).then((r) => r.blob())
+
+  await db.put('attachments', blob, key)
+}
+```
+
+This is the one to reach for. It scales past your request limit, and downloads run in parallel
+without occupying a function.
+
+**Streaming through your route.** Necessary when a permission check has to run on every read:
+
+```ts
+const file = await store.get(key)
+
+if (!file) return new Response('Not found', { status: 404 })
+
+return new Response(Readable.toWeb(file.body) as ReadableStream, {
+  headers: { 'Content-Type': file.contentType, 'Cache-Control': 'private, no-store' },
+})
+```
+
+## Order matters
+
+Upload the attachments **before** the snapshot that references them, and delete them **after** the
+snapshot that references them. Any other order gives the receiving device a record pointing at
+something that is not there.
+
+```ts
+const keys = await Promise.all(blobs.map(uploadAttachment))
+await store.putSnapshot(code, stateReferencing(keys))
+```
+
+If an attachment fails to upload, fail the whole transfer rather than shipping a snapshot with a
+dangling reference. A partial restore is harder to explain than a failed one.
+
+## Cleaning up
+
+Everything for one transfer lives under one prefix, so the lifecycle rule that expires snapshots
+should cover attachments too:
+
+```jsonc
+{
+  "Rules": [
+    {
+      "ID": "expire-transfers",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "transfers/" },
+      "Expiration": { "Days": 1 },
+    },
+    {
+      "ID": "expire-attachments",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "attachments/" },
+      "Expiration": { "Days": 1 },
+    },
+  ],
+}
+```
+
+For a [continuous backup](/docs/use-cases/continuous-backup) the attachments are not disposable —
+key them by account and content hash, so re-uploading an unchanged file overwrites itself instead
+of accumulating copies:
+
+```ts
+const hash = await sha256(await file.arrayBuffer())
+
+await store.put(`user-${userId}/${hash}`, file, { prefix: 'attachments' })
+```
+
+Deduplication falls out for free, and a snapshot that references a hash keeps working across every
+backup that follows.

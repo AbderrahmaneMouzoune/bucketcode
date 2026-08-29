@@ -1,6 +1,6 @@
 import { createSyncCode, isBucketCodeError } from 'bucketcode'
 
-import { bucket, CODE_TTL_SECONDS, SCHEMA_VERSION } from '@/lib/bucket'
+import { store, CODE_TTL_SECONDS, SCHEMA_VERSION } from '@/lib/store'
 
 /** POST /api/sync — take this device's database and hand back a code for it. */
 export async function POST(request: Request) {
@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   const code = createSyncCode()
 
   try {
-    const result = await bucket().putSnapshot(code, state, {
+    const result = await store().putSnapshot(code, state, {
       app: 'bucketcode-notes',
       version: SCHEMA_VERSION,
       device: request.headers.get('user-agent') ?? undefined,

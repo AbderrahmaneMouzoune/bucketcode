@@ -5,14 +5,14 @@ Move a local-first app's data from one device to another, through your own bucke
 ```ts
 import { createBucket, createSyncCode, normalizeSyncCode } from 'bucketcode'
 
-const bucket = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
+const store = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
 
 // On the old device: hand the user a code.
 const code = createSyncCode() // "K7QP2M4X"
-await bucket.putSnapshot(code, state, { app: 'notes', version: 3, expiresIn: 3600 })
+await store.putSnapshot(code, state, { app: 'notes', version: 3, expiresIn: 3600 })
 
 // On the new device: they type it in.
-const snapshot = await bucket.getSnapshot(normalizeSyncCode(typed), { maxVersion: 3 })
+const snapshot = await store.getSnapshot(normalizeSyncCode(typed), { maxVersion: 3 })
 snapshot?.data // → the state, ready to write back into IndexedDB
 ```
 
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
   const state = await request.json()
   const code = createSyncCode()
 
-  await bucket.putSnapshot(code, state, {
+  await store.putSnapshot(code, state, {
     app: 'notes',
     version: SCHEMA_VERSION,
     device: request.headers.get('user-agent') ?? undefined,
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
 export async function GET(_request: Request, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
 
-  const snapshot = await bucket.getSnapshot(normalizeSyncCode(code), { maxVersion: SCHEMA_VERSION })
+  const snapshot = await store.getSnapshot(normalizeSyncCode(code), { maxVersion: SCHEMA_VERSION })
 
   if (!snapshot) return Response.json({ error: 'Unknown or expired code' }, { status: 404 })
 
@@ -132,10 +132,10 @@ transfer — pass the ETag you last read as `ifMatch`. A device that writes afte
 gets `PRECONDITION_FAILED` instead of silently discarding their work:
 
 ```ts
-const current = await bucket.getSnapshot(`user-${userId}`)
+const current = await store.getSnapshot(`user-${userId}`)
 
 try {
-  await bucket.putSnapshot(`user-${userId}`, merged, { ifMatch: current?.etag })
+  await store.putSnapshot(`user-${userId}`, merged, { ifMatch: current?.etag })
 } catch (error) {
   if (isBucketCodeError(error) && error.code === 'PRECONDITION_FAILED') {
     // Another device won. Read again, merge again.
@@ -154,17 +154,17 @@ Snapshots are built on a small set of file primitives, and they stay available f
 is not a snapshot — an attachment, an exported PDF, an avatar:
 
 ```ts
-await bucket.upload(file) // → { key, path, url?, size?, etag?, contentType }
-await bucket.put(id, file) // one file per identifier: create or replace
-await bucket.get(id) // → the file back, or null
-await bucket.getUrl(id) // → public or presigned URL
-await bucket.delete(id) // → void
+await store.upload(file) // → { key, path, url?, size?, etag?, contentType }
+await store.put(id, file) // one file per identifier: create or replace
+await store.get(id) // → the file back, or null
+await store.getUrl(id) // → public or presigned URL
+await store.delete(id) // → void
 ```
 
 Keys round-trip: what `upload()` returns is what you hand back to `get()`, `getUrl()` and
 `delete()`. The configured `prefix` is an internal namespace.
 
-Anything the package does not wrap is one command away through `bucket.client`, which is the plain
+Anything the package does not wrap is one command away through `store.client`, which is the plain
 `S3Client`.
 
 ## Errors

@@ -1,6 +1,6 @@
 import { isBucketCodeError, normalizeSyncCode } from 'bucketcode'
 
-import { bucket, SCHEMA_VERSION } from '@/lib/bucket'
+import { store, SCHEMA_VERSION } from '@/lib/store'
 
 interface Context {
   params: Promise<{ code: string }>
@@ -26,7 +26,7 @@ export async function GET(_request: Request, { params }: Context) {
 
   let snapshot
   try {
-    snapshot = await bucket().getSnapshot(parsed.code, { maxVersion: SCHEMA_VERSION })
+    snapshot = await store().getSnapshot(parsed.code, { maxVersion: SCHEMA_VERSION })
   } catch (error) {
     if (isBucketCodeError(error) && error.code === 'SNAPSHOT_TOO_NEW') {
       return Response.json({ error: 'That snapshot needs a newer version of this app' }, { status: 409 })
@@ -52,7 +52,7 @@ export async function DELETE(_request: Request, { params }: Context) {
   const parsed = parse((await params).code)
   if ('response' in parsed) return parsed.response
 
-  await bucket().delete(parsed.code)
+  await store().delete(parsed.code)
 
   return new Response(null, { status: 204 })
 }

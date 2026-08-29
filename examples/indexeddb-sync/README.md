@@ -40,7 +40,7 @@ Create the bucket once from the console at http://localhost:9001.
 | ---------------- | --------------------------------------------------------------------------------------- |
 | `lib/db.ts`      | The IndexedDB store, and the `exportDatabase` / `importDatabase` pair a transfer needs. |
 | `lib/sync.ts`    | The browser half: post the dump, look a code up, apply it.                              |
-| `lib/bucket.ts`  | The bucket, built lazily, with `maxSize` under the platform limit.                      |
+| `lib/store.ts`   | The bucket, built lazily, with `maxSize` under the platform limit.                      |
 | `app/api/sync/…` | The two routes. Around forty lines, most of it error mapping.                           |
 
 `lib/db.ts` is deliberately application code. Only your app knows its own object stores, which is

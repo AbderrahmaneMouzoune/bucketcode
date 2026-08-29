@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import type { ReactNode } from 'react'
+import { RootProvider } from 'fumadocs-ui/provider/next'
 
-import './globals.css'
+import './global.css'
 
 export const metadata: Metadata = {
   title: {
@@ -10,35 +9,14 @@ export const metadata: Metadata = {
     template: '%s · bucketcode',
   },
   description:
-    'Server-side S3 uploads without the ceremony. Upload, put, get, getUrl, delete — for AWS S3, Cloudflare R2, MinIO and any S3-compatible storage.',
+    "Move a local-first app's data from one device to another, through your own bucket. Snapshots, sync codes, and a small server-side API.",
 }
 
-const REPOSITORY = 'https://github.com/AbderrahmaneMouzoune/bucketcode'
-
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en">
-      <body>
-        <header className="header">
-          <Link className="header-brand" href="/">
-            bucketcode
-          </Link>
-          <nav className="header-nav">
-            <Link href="/docs">Docs</Link>
-            <Link href="/docs/use-cases/new-device">Use cases</Link>
-            <Link href="/docs/api">API</Link>
-            <a href={REPOSITORY}>GitHub</a>
-          </nav>
-        </header>
-
-        {children}
-
-        <footer className="footer">
-          <div className="footer-inner">
-            <span>MIT © Abderrahmane Mouzoune</span>
-            <a href={`${REPOSITORY}/tree/main/examples`}>Examples</a>
-          </div>
-        </footer>
+    <html lang="en" suppressHydrationWarning>
+      <body className="flex min-h-screen flex-col">
+        <RootProvider>{children}</RootProvider>
       </body>
     </html>
   )
