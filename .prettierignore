@@ -6,3 +6,5 @@ next-env.d.ts
 coverage/
 node_modules/
 pnpm-lock.yaml
+# written by release-please, in its own markdown style
+CHANGELOG.md
