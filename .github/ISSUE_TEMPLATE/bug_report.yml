@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in bucketcode does not behave the way it is documented.
+labels: ['bug']
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The most useful thing you can give us is the
+        smallest snippet that reproduces the problem.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: A snippet, or a link to a repository. Redact your credentials.
+      render: ts
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: bucketcode version
+      placeholder: '0.1.0'
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      placeholder: '22.11.0'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Storage
+      options:
+        - AWS S3
+        - Cloudflare R2
+        - MinIO
+        - Scaleway
+        - Wasabi
+        - Other S3-compatible
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error output
+      description: The full `BucketCodeError`, including its `code` and `cause`.
+      render: shell

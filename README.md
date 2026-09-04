@@ -1,5 +1,12 @@
 # bucketcode
 
+[![npm](https://img.shields.io/npm/v/bucketcode?color=cb3837&logo=npm)](https://www.npmjs.com/package/bucketcode)
+[![CI](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml/badge.svg)](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml)
+[![npm downloads](https://img.shields.io/npm/dm/bucketcode?color=blue)](https://www.npmjs.com/package/bucketcode)
+[![install size](https://packagephobia.com/badge?p=bucketcode)](https://packagephobia.com/result?p=bucketcode)
+[![types](https://img.shields.io/npm/types/bucketcode)](https://www.npmjs.com/package/bucketcode)
+[![license](https://img.shields.io/npm/l/bucketcode?color=success)](./LICENSE)
+
 Move a local-first app's data from one device to another, through your own bucket.
 
 ```ts
@@ -103,6 +110,15 @@ Two repository secrets:
 
 Running the workflow by hand with **Publish** ticked publishes the version currently on `main` —
 the way out when a release was tagged but the publish step failed.
+
+## Contributing
+
+[CONTRIBUTING.md](./CONTRIBUTING.md) covers the setup, the test stand-ins for S3, the rules for
+changing the public API, and why the pull request title is the thing that matters. Everyone taking
+part agrees to the [Code of Conduct](./CODE_OF_CONDUCT.md).
+
+Found a security problem? [SECURITY.md](./SECURITY.md) — report it privately, and read it anyway
+before shipping: it spells out what a sync code does and does not protect.
 
 ## License
 

@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest something bucketcode should be able to do.
+labels: ['enhancement']
+
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that bucketcode makes hard today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: The API you would want to write, if you have one in mind.
+      render: ts
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do instead today
+      description: The workaround, if there is one.
