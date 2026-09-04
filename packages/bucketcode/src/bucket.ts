@@ -17,6 +17,7 @@ import { decodeSnapshot, encodeSnapshot, ENVELOPE_VERSION } from './snapshot.js'
 import { createSyncCodes } from './sync-code.js'
 import type {
   BucketConfig,
+  DeleteOptions,
   GetOptions,
   GetSnapshotOptions,
   GetUrlOptions,
@@ -372,7 +373,7 @@ export class Bucket {
    * a presigned GET otherwise. Use `signed` to force either behaviour.
    */
   async getUrl(key: string, options: GetUrlOptions = {}): Promise<string> {
-    const path = this.resolvePath(key)
+    const path = this.resolvePath(key, options.prefix)
     const wantsSigned = options.signed ?? this.config.publicUrl == null
 
     if (!wantsSigned) {
@@ -412,17 +413,19 @@ export class Bucket {
    * Deletes one or many objects. Deleting a key that does not exist is not an
    * error — S3 treats it as a no-op, and so does this method.
    */
-  async delete(key: string | string[]): Promise<void> {
+  async delete(key: string | string[], options: DeleteOptions = {}): Promise<void> {
     const keys = Array.isArray(key) ? key : [key]
     if (keys.length === 0) return
 
-    const paths = keys.map((candidate) => this.resolvePath(candidate))
+    const paths = keys.map((candidate) => this.resolvePath(candidate, options.prefix))
 
     if (paths.length === 1) {
       const only = paths[0]!
 
       try {
-        await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: only }))
+        await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: only }), {
+          abortSignal: options.signal,
+        })
         return
       } catch (error) {
         throw new BucketCodeError(
@@ -442,6 +445,7 @@ export class Bucket {
             Bucket: this.bucket,
             Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
           }),
+          { abortSignal: options.signal },
         )
 
         failures = (response.Errors ?? []).map((entry) => `${entry.Key ?? '?'} (${entry.Code ?? 'unknown'})`)

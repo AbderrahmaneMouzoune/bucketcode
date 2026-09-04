@@ -144,7 +144,15 @@ export interface StoredFile {
   text(): Promise<string>
 }
 
+export interface DeleteOptions {
+  /** Prefix for this delete only. Overrides the bucket-level `prefix`. */
+  prefix?: string
+  signal?: AbortSignal
+}
+
 export interface GetUrlOptions {
+  /** Prefix for this URL only. Overrides the bucket-level `prefix`. */
+  prefix?: string
   /** Lifetime of a signed URL, in seconds. Default `3600`, max `604800` (7 days). */
   expiresIn?: number
   /**
