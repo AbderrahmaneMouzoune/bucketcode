@@ -74,4 +74,12 @@ describe('Bucket.getUrl', () => {
     await expect(bucket.getUrl('../secrets.env')).rejects.toMatchObject({ code: 'INVALID_KEY' })
     expect(send).not.toHaveBeenCalled()
   })
+
+  it('applies a per-call prefix instead of the bucket-level one', async () => {
+    const { client } = createStubClient()
+    const store = createBucket({ bucket: 'b', prefix: 'snapshots', publicUrl: 'https://cdn.example.com', client })
+
+    expect(await store.getUrl('K7QP2M4X')).toBe('https://cdn.example.com/snapshots/K7QP2M4X')
+    expect(await store.getUrl('K7QP2M4X', { prefix: 'tenant-42' })).toBe('https://cdn.example.com/tenant-42/K7QP2M4X')
+  })
 })

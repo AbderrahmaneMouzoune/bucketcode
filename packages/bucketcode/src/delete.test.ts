@@ -78,6 +78,43 @@ describe('Bucket.delete', () => {
     expect(error.code).toBe('DELETE_FAILED')
     expect(error.cause).toBe(cause)
   })
+
+  it('applies the bucket-level prefix to the key', async () => {
+    const { client, calls } = createStubClient()
+    const store = createBucket({ bucket: 'b', prefix: 'snapshots', client })
+
+    await store.delete('K7QP2M4X')
+
+    expect(calls[0]?.command.input.Key).toBe('snapshots/K7QP2M4X')
+  })
+
+  it('applies a per-call prefix instead of the bucket-level one', async () => {
+    const { client, calls } = createStubClient()
+    const store = createBucket({ bucket: 'b', prefix: 'snapshots', client })
+
+    await store.delete('K7QP2M4X', { prefix: 'tenant-42' })
+
+    expect(calls[0]?.command.input.Key).toBe('tenant-42/K7QP2M4X')
+  })
+
+  it('applies a per-call prefix to every key of a batch', async () => {
+    const { client, calls } = createStubClient({ Errors: [] })
+    const store = createBucket({ bucket: 'b', client })
+
+    await store.delete(['a', 'b'], { prefix: 'tenant-42' })
+
+    expect(calls[0]?.command.input.Delete.Objects).toEqual([{ Key: 'tenant-42/a' }, { Key: 'tenant-42/b' }])
+  })
+
+  it('forwards the abort signal to the client', async () => {
+    const { client, calls } = createStubClient()
+    const store = createBucket({ bucket: 'b', client })
+    const signal = AbortSignal.timeout(1000)
+
+    await store.delete('a', { signal })
+
+    expect(calls[0]?.options?.abortSignal).toBe(signal)
+  })
 })
 
 describe('Bucket.client', () => {

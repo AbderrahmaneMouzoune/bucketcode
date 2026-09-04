@@ -4,6 +4,7 @@ export { createSyncCode, createSyncCodes, normalizeSyncCode, syncCodeAlphabets }
 export type {
   BucketConfig,
   BucketCredentials,
+  DeleteOptions,
   GetOptions,
   GetSnapshotOptions,
   GetUrlOptions,
