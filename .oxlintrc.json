@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "plugins": ["vitest"],
+  "categories": {
+    "correctness": "off"
+  },
+  "rules": {
+    "vitest/valid-title": [
+      "error",
+      {
+        "disallowedWords": ["should", "must", "correctly", "properly", "successfully", "works", "test"]
+      }
+    ],
+    "vitest/prefer-lowercase-title": ["error", { "ignore": ["describe"] }],
+    "vitest/consistent-test-it": ["error", { "fn": "it", "withinDescribe": "it" }],
+    "vitest/no-identical-title": "error",
+    "vitest/max-nested-describe": ["error", { "max": 2 }],
+    "vitest/no-focused-tests": "error",
+    "vitest/no-disabled-tests": "error",
+    "vitest/expect-expect": "error"
+  },
+  "ignorePatterns": ["**/dist/**", "**/.next/**", "**/.turbo/**", "**/coverage/**", "**/node_modules/**"]
+}

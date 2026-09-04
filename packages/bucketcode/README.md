@@ -1,5 +1,12 @@
 # bucketcode
 
+[![npm](https://img.shields.io/npm/v/bucketcode?color=cb3837&logo=npm)](https://www.npmjs.com/package/bucketcode)
+[![CI](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml/badge.svg)](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml)
+[![npm downloads](https://img.shields.io/npm/dm/bucketcode?color=blue)](https://www.npmjs.com/package/bucketcode)
+[![install size](https://packagephobia.com/badge?p=bucketcode)](https://packagephobia.com/result?p=bucketcode)
+[![types](https://img.shields.io/npm/types/bucketcode)](https://www.npmjs.com/package/bucketcode)
+[![license](https://img.shields.io/npm/l/bucketcode?color=success)](./LICENSE)
+
 Move a local-first app's data from one device to another, through your own bucket.
 
 ```ts

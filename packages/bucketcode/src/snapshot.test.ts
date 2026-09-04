@@ -2,9 +2,9 @@ import { gunzipSync } from 'node:zlib'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createBucket } from '../src/bucket.js'
-import type { BucketCodeError } from '../src/errors.js'
-import { clearBucketEnv, createMemoryClient, createStubClient } from './helpers.js'
+import { createBucket } from './bucket.js'
+import type { BucketCodeError } from './errors.js'
+import { clearBucketEnv, createMemoryClient, createStubClient } from './test-helpers.js'
 
 beforeEach(clearBucketEnv)
 afterEach(() => {
@@ -21,8 +21,8 @@ const STATE = {
   settings: { theme: 'dark' },
 }
 
-describe('putSnapshot', () => {
-  it('stores a gzipped, self-describing envelope', async () => {
+describe('Bucket.putSnapshot', () => {
+  it('stores a gzipped envelope carrying the app, version, device and createdAt', async () => {
     const { client, calls } = createStubClient({ ETag: '"abc"' })
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -45,7 +45,7 @@ describe('putSnapshot', () => {
     expect(envelope.expiresAt).toBeUndefined()
   })
 
-  it('compresses well enough to matter', async () => {
+  it('stores a repetitive state smaller than its raw JSON', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -62,7 +62,7 @@ describe('putSnapshot', () => {
     expect(calls[0]!.command.input.Body.byteLength).toBeLessThan(raw / 5)
   })
 
-  it('can skip compression', async () => {
+  it('stores plain JSON when compress is false', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -73,7 +73,7 @@ describe('putSnapshot', () => {
     expect(JSON.parse(Buffer.from(calls[0]!.command.input.Body).toString('utf8')).data).toEqual(STATE)
   })
 
-  it('stamps an expiry when asked', async () => {
+  it('stamps expiresAt when expiresIn is given', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-27T12:00:00Z'))
 
@@ -87,7 +87,7 @@ describe('putSnapshot', () => {
     expect(envelope.expiresAt).toBe('2026-08-27T13:00:00.000Z')
   })
 
-  it('rejects data JSON cannot represent', async () => {
+  it('throws INVALID_SNAPSHOT when the data is not JSON-serializable', async () => {
     const { client, send } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -98,7 +98,7 @@ describe('putSnapshot', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('rejects a non-positive expiry', async () => {
+  it('throws INVALID_SNAPSHOT when expiresIn is not positive', async () => {
     const { client } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -106,90 +106,8 @@ describe('putSnapshot', () => {
       code: 'INVALID_SNAPSHOT',
     })
   })
-})
 
-describe('getSnapshot', () => {
-  it('round-trips the state, with everything that described it', async () => {
-    const { client } = createMemoryClient()
-    const bucket = createBucket({ bucket: 'assets', prefix: 'snapshots', client })
-
-    const written = await bucket.putSnapshot('XK5892', STATE, { app: 'notes', version: 3, device: 'Pixel 8' })
-    const read = await bucket.getSnapshot<typeof STATE>('XK5892')
-
-    expect(read?.data).toEqual(STATE)
-    expect(read).toMatchObject({ app: 'notes', version: 3, device: 'Pixel 8', key: 'XK5892', path: 'snapshots/XK5892' })
-    expect(read?.createdAt.toISOString()).toBe(written.createdAt.toISOString())
-    expect(read?.etag).toBe(written.etag)
-  })
-
-  it('reads an uncompressed snapshot too', async () => {
-    const { client } = createMemoryClient()
-    const bucket = createBucket({ bucket: 'assets', client })
-
-    await bucket.putSnapshot('XK5892', STATE, { compress: false })
-
-    expect((await bucket.getSnapshot('XK5892'))?.data).toEqual(STATE)
-  })
-
-  it('returns null when there is nothing stored', async () => {
-    const { client } = createMemoryClient()
-    const bucket = createBucket({ bucket: 'assets', client })
-
-    expect(await bucket.getSnapshot('XK5892')).toBeNull()
-  })
-
-  it('treats an expired snapshot as gone', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-08-27T12:00:00Z'))
-
-    const { client } = createMemoryClient()
-    const bucket = createBucket({ bucket: 'assets', client })
-
-    await bucket.putSnapshot('XK5892', STATE, { expiresIn: 3600 })
-
-    vi.setSystemTime(new Date('2026-08-27T12:59:00Z'))
-    expect(await bucket.getSnapshot('XK5892')).not.toBeNull()
-
-    vi.setSystemTime(new Date('2026-08-27T13:00:01Z'))
-    expect(await bucket.getSnapshot('XK5892')).toBeNull()
-  })
-
-  it('refuses a snapshot written by a newer build', async () => {
-    const { client } = createMemoryClient()
-    const bucket = createBucket({ bucket: 'assets', client })
-
-    await bucket.putSnapshot('XK5892', STATE, { version: 5 })
-
-    await expect(bucket.getSnapshot('XK5892', { maxVersion: 3 })).rejects.toMatchObject({
-      code: 'SNAPSHOT_TOO_NEW',
-    })
-    expect(await bucket.getSnapshot('XK5892', { maxVersion: 5 })).not.toBeNull()
-  })
-
-  it('rejects an object that is not a snapshot', async () => {
-    const { client } = createMemoryClient()
-    const bucket = createBucket({ bucket: 'assets', client })
-
-    await bucket.upload('just a text file', { key: 'XK5892' })
-
-    const error = (await bucket.getSnapshot('XK5892').catch((e) => e)) as BucketCodeError
-    expect(error.code).toBe('INVALID_SNAPSHOT')
-  })
-
-  it('rejects an envelope from a future format', async () => {
-    const { client } = createMemoryClient()
-    const bucket = createBucket({ bucket: 'assets', client })
-
-    await bucket.upload(JSON.stringify({ bucketcode: 99, createdAt: new Date().toISOString(), data: {} }), {
-      key: 'XK5892',
-    })
-
-    await expect(bucket.getSnapshot('XK5892')).rejects.toThrowError(/Upgrade the package/)
-  })
-})
-
-describe('concurrent devices', () => {
-  it('refuses to overwrite a snapshot that moved under you', async () => {
+  it('throws PRECONDITION_FAILED when ifMatch no longer matches the stored etag', async () => {
     const { client } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -206,7 +124,7 @@ describe('concurrent devices', () => {
     expect(await bucket.getSnapshot('XK5892')).toMatchObject({ data: { notes: ['a', 'b'] } })
   })
 
-  it('accepts a write when the ETag still matches', async () => {
+  it('writes when ifMatch still matches the stored etag', async () => {
     const { client } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -216,7 +134,7 @@ describe('concurrent devices', () => {
     expect(await bucket.getSnapshot('XK5892')).toMatchObject({ data: { notes: ['a', 'b'] } })
   })
 
-  it('claims a code only if nobody else did', async () => {
+  it('throws PRECONDITION_FAILED when ifAbsent is set and the key is taken', async () => {
     const { client } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -225,5 +143,85 @@ describe('concurrent devices', () => {
     await expect(bucket.putSnapshot('XK5892', STATE, { ifAbsent: true })).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
     })
+  })
+})
+
+describe('Bucket.getSnapshot', () => {
+  it('returns the state with the app, version, device and createdAt it was written with', async () => {
+    const { client } = createMemoryClient()
+    const bucket = createBucket({ bucket: 'assets', prefix: 'snapshots', client })
+
+    const written = await bucket.putSnapshot('XK5892', STATE, { app: 'notes', version: 3, device: 'Pixel 8' })
+    const read = await bucket.getSnapshot<typeof STATE>('XK5892')
+
+    expect(read?.data).toEqual(STATE)
+    expect(read).toMatchObject({ app: 'notes', version: 3, device: 'Pixel 8', key: 'XK5892', path: 'snapshots/XK5892' })
+    expect(read?.createdAt.toISOString()).toBe(written.createdAt.toISOString())
+    expect(read?.etag).toBe(written.etag)
+  })
+
+  it('reads a snapshot back when it was stored uncompressed', async () => {
+    const { client } = createMemoryClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    await bucket.putSnapshot('XK5892', STATE, { compress: false })
+
+    expect((await bucket.getSnapshot('XK5892'))?.data).toEqual(STATE)
+  })
+
+  it('returns null when nothing is stored under the key', async () => {
+    const { client } = createMemoryClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    expect(await bucket.getSnapshot('XK5892')).toBeNull()
+  })
+
+  it('returns null when the snapshot has passed its expiresAt', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-27T12:00:00Z'))
+
+    const { client } = createMemoryClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    await bucket.putSnapshot('XK5892', STATE, { expiresIn: 3600 })
+
+    vi.setSystemTime(new Date('2026-08-27T12:59:00Z'))
+    expect(await bucket.getSnapshot('XK5892')).not.toBeNull()
+
+    vi.setSystemTime(new Date('2026-08-27T13:00:01Z'))
+    expect(await bucket.getSnapshot('XK5892')).toBeNull()
+  })
+
+  it('throws SNAPSHOT_TOO_NEW when the schema version exceeds maxVersion', async () => {
+    const { client } = createMemoryClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    await bucket.putSnapshot('XK5892', STATE, { version: 5 })
+
+    await expect(bucket.getSnapshot('XK5892', { maxVersion: 3 })).rejects.toMatchObject({
+      code: 'SNAPSHOT_TOO_NEW',
+    })
+    expect(await bucket.getSnapshot('XK5892', { maxVersion: 5 })).not.toBeNull()
+  })
+
+  it('throws INVALID_SNAPSHOT when the object is not a bucketcode envelope', async () => {
+    const { client } = createMemoryClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    await bucket.upload('just a text file', { key: 'XK5892' })
+
+    const error = (await bucket.getSnapshot('XK5892').catch((e) => e)) as BucketCodeError
+    expect(error.code).toBe('INVALID_SNAPSHOT')
+  })
+
+  it('throws INVALID_SNAPSHOT when the envelope format is newer than this build', async () => {
+    const { client } = createMemoryClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    await bucket.upload(JSON.stringify({ bucketcode: 99, createdAt: new Date().toISOString(), data: {} }), {
+      key: 'XK5892',
+    })
+
+    await expect(bucket.getSnapshot('XK5892')).rejects.toThrowError(/Upgrade the package/)
   })
 })

@@ -2,15 +2,15 @@ import { Readable } from 'node:stream'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createBucket } from '../src/bucket.js'
-import type { BucketCodeError } from '../src/errors.js'
-import { clearBucketEnv, createStubClient } from './helpers.js'
+import { createBucket } from './bucket.js'
+import type { BucketCodeError } from './errors.js'
+import { clearBucketEnv, createStubClient } from './test-helpers.js'
 
 beforeEach(clearBucketEnv)
 afterEach(() => vi.unstubAllEnvs())
 
-describe('upload', () => {
-  it('sends a single PutObject and reports the result', async () => {
+describe('Bucket.upload', () => {
+  it('stores the body and reports the key, path, content type, size and etag', async () => {
     const { client, calls } = createStubClient({ ETag: '"d41d8cd9"' })
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -33,7 +33,7 @@ describe('upload', () => {
     expect(result.url).toBeUndefined()
   })
 
-  it('generates a key from a File and keeps its content type', async () => {
+  it('generates a key from the File name and keeps its content type', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -43,7 +43,7 @@ describe('upload', () => {
     expect(calls[0]!.command.input.ContentType).toBe('image/png')
   })
 
-  it('applies the bucket prefix to the object, not to the returned key', async () => {
+  it('applies the bucket prefix to the object path but not to the returned key', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', prefix: 'uploads', client })
 
@@ -55,7 +55,7 @@ describe('upload', () => {
     expect(result.path).toBe('uploads/a.txt')
   })
 
-  it('lets a per-upload prefix win', async () => {
+  it('applies a per-call prefix instead of the bucket-level one', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', prefix: 'uploads', client })
 
@@ -65,7 +65,7 @@ describe('upload', () => {
     expect(result.path).toBe('tenant-42/avatars/a.txt')
   })
 
-  it('stores the original filename as metadata', async () => {
+  it('stores the original filename as percent-encoded metadata', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -74,7 +74,7 @@ describe('upload', () => {
     expect(calls[0]!.command.input.Metadata).toEqual({ filename: encodeURIComponent('Rapport été.pdf') })
   })
 
-  it('does not invent metadata when there is no filename', async () => {
+  it('sends no metadata when there is no filename', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -83,7 +83,7 @@ describe('upload', () => {
     expect(calls[0]!.command.input.Metadata).toBeUndefined()
   })
 
-  it('guesses the content type from the key extension', async () => {
+  it('derives the content type from the key extension', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -92,7 +92,7 @@ describe('upload', () => {
     expect(calls[0]!.command.input.ContentType).toBe('application/pdf')
   })
 
-  it('falls back to the filename, then to octet-stream', async () => {
+  it('derives the content type from the filename, then falls back to octet-stream', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -103,7 +103,7 @@ describe('upload', () => {
     expect(calls[1]!.command.input.ContentType).toBe('application/octet-stream')
   })
 
-  it('honours an explicit content type over everything else', async () => {
+  it('prefers an explicit content type over every detected one', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -112,7 +112,7 @@ describe('upload', () => {
     expect(calls[0]!.command.input.ContentType).toBe('image/avif')
   })
 
-  it('forwards the optional S3 metadata', async () => {
+  it('forwards cacheControl, contentDisposition, acl and user metadata to S3', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -139,7 +139,7 @@ describe('upload', () => {
     expect(result.url).toBe('https://cdn.example.com/mon%20dossier/a.txt')
   })
 
-  it('rejects a body above maxSize without hitting the network', async () => {
+  it('throws FILE_TOO_LARGE without sending a request when the body exceeds maxSize', async () => {
     const { client, send } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', maxSize: 4, client })
 
@@ -149,7 +149,7 @@ describe('upload', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('rejects an invalid key without hitting the network', async () => {
+  it('throws INVALID_KEY without sending a request when the key is invalid', async () => {
     const { client, send } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -157,7 +157,7 @@ describe('upload', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('uploads a stream when its length is known', async () => {
+  it('uploads a stream when contentLength is given', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -168,7 +168,7 @@ describe('upload', () => {
     expect(calls[0]!.command.input.ContentLength).toBe(3)
   })
 
-  it('refuses a stream of unknown length', async () => {
+  it('throws MISSING_CONTENT_LENGTH when a stream has no contentLength', async () => {
     const { client, send } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -178,7 +178,7 @@ describe('upload', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('forwards an abort signal', async () => {
+  it('forwards the abort signal to the client', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
     const controller = new AbortController()
@@ -188,7 +188,7 @@ describe('upload', () => {
     expect(calls[0]!.options?.abortSignal).toBe(controller.signal)
   })
 
-  it('wraps transport failures, keeping the original error as cause', async () => {
+  it('throws UPLOAD_FAILED with the transport error as cause', async () => {
     const cause = new Error('NoSuchBucket')
     const { client } = createStubClient({}, cause)
     const bucket = createBucket({ bucket: 'assets', client })

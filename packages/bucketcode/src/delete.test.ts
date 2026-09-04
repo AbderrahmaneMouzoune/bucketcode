@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createBucket } from '../src/bucket.js'
-import type { BucketCodeError } from '../src/errors.js'
-import { clearBucketEnv, createStubClient } from './helpers.js'
+import { createBucket } from './bucket.js'
+import type { BucketCodeError } from './errors.js'
+import { clearBucketEnv, createStubClient } from './test-helpers.js'
 
 beforeEach(clearBucketEnv)
 afterEach(() => vi.unstubAllEnvs())
 
-describe('delete', () => {
-  it('deletes a single object', async () => {
+describe('Bucket.delete', () => {
+  it('deletes one object when given a single key', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -19,7 +19,7 @@ describe('delete', () => {
     expect(calls[0]!.command.input).toMatchObject({ Bucket: 'assets', Key: 'uploads/a.txt' })
   })
 
-  it('batches several objects into one request', async () => {
+  it('deletes several objects in one batched request', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -30,7 +30,7 @@ describe('delete', () => {
     expect(calls[0]!.command.input.Delete.Objects).toEqual([{ Key: 'a.txt' }, { Key: 'b.txt' }])
   })
 
-  it('splits batches at the 1000-key limit', async () => {
+  it('splits a batch at the 1000-key limit S3 enforces', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -41,7 +41,7 @@ describe('delete', () => {
     expect(calls[1]!.command.input.Delete.Objects).toHaveLength(1)
   })
 
-  it('does nothing for an empty list', async () => {
+  it('sends no request when the key list is empty', async () => {
     const { client, send } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -50,7 +50,7 @@ describe('delete', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('validates every key before sending anything', async () => {
+  it('throws INVALID_KEY without sending a request when one key is invalid', async () => {
     const { client, send } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -58,7 +58,7 @@ describe('delete', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('reports per-object failures returned by S3', async () => {
+  it('throws DELETE_FAILED naming the keys S3 reported as failed', async () => {
     const { client } = createStubClient({ Errors: [{ Key: 'b.txt', Code: 'AccessDenied' }] })
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -68,7 +68,7 @@ describe('delete', () => {
     expect(error.message).toContain('b.txt (AccessDenied)')
   })
 
-  it('wraps transport failures, keeping the original error as cause', async () => {
+  it('throws DELETE_FAILED with the transport error as cause', async () => {
     const cause = new Error('NetworkingError')
     const { client } = createStubClient({}, cause)
     const bucket = createBucket({ bucket: 'assets', client })
@@ -80,14 +80,16 @@ describe('delete', () => {
   })
 })
 
-describe('client lifecycle', () => {
-  it('reuses a lazily created client', () => {
+describe('Bucket.client', () => {
+  it('returns the same lazily created client on every access', () => {
     const bucket = createBucket({ bucket: 'assets', region: 'eu-west-3' })
 
     expect(bucket.client).toBe(bucket.client)
   })
+})
 
-  it('closes the client it created, then builds a fresh one', () => {
+describe('Bucket.destroy', () => {
+  it('destroys the client it created and builds a fresh one on the next access', () => {
     const bucket = createBucket({ bucket: 'assets', region: 'eu-west-3' })
     const first = bucket.client
     const destroy = vi.spyOn(first, 'destroy')
@@ -98,7 +100,7 @@ describe('client lifecycle', () => {
     expect(bucket.client).not.toBe(first)
   })
 
-  it('leaves an injected client alone', () => {
+  it('leaves an injected client untouched', () => {
     const { client } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 

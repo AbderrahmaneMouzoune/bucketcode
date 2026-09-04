@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { resolveConfig } from '../src/config.js'
-import type { BucketCodeError } from '../src/errors.js'
-import { clearBucketEnv } from './helpers.js'
+import { resolveConfig } from './config.js'
+import type { BucketCodeError } from './errors.js'
+import { clearBucketEnv } from './test-helpers.js'
 
 beforeEach(clearBucketEnv)
 afterEach(() => vi.unstubAllEnvs())
 
 describe('resolveConfig', () => {
-  it('requires a bucket', () => {
+  it('throws INVALID_CONFIG when no bucket is configured', () => {
     const error = (() => {
       try {
         resolveConfig()
@@ -21,48 +21,48 @@ describe('resolveConfig', () => {
     expect(error?.message).toMatch(/BUCKETCODE_BUCKET/)
   })
 
-  it('falls back to environment variables', () => {
+  it('reads the bucket and region from the environment when they are not passed', () => {
     vi.stubEnv('S3_BUCKET', 'from-env')
     vi.stubEnv('AWS_REGION', 'eu-west-3')
 
     expect(resolveConfig()).toMatchObject({ bucket: 'from-env', region: 'eu-west-3' })
   })
 
-  it('prefers explicit config over the environment', () => {
+  it('prefers an explicit bucket over the environment', () => {
     vi.stubEnv('S3_BUCKET', 'from-env')
 
     expect(resolveConfig({ bucket: 'explicit' }).bucket).toBe('explicit')
   })
 
-  it('defaults region and path style for custom endpoints', () => {
+  it('applies S3-compatible defaults when a custom endpoint is set', () => {
     const config = resolveConfig({ bucket: 'b', endpoint: 'https://account.r2.cloudflarestorage.com' })
 
     expect(config.region).toBe('auto')
     expect(config.forcePathStyle).toBe(true)
   })
 
-  it('leaves path style off for plain AWS', () => {
+  it('leaves path style off when no endpoint is set', () => {
     expect(resolveConfig({ bucket: 'b', region: 'eu-west-3' }).forcePathStyle).toBe(false)
   })
 
-  it('lets forcePathStyle be overridden', () => {
+  it('honours an explicit forcePathStyle over the endpoint default', () => {
     expect(resolveConfig({ bucket: 'b', endpoint: 'https://example.com', forcePathStyle: false }).forcePathStyle).toBe(
       false,
     )
   })
 
-  it('normalizes the public URL and the prefix', () => {
+  it('strips surrounding slashes from the public URL and the prefix', () => {
     const config = resolveConfig({ bucket: 'b', publicUrl: 'https://cdn.example.com/', prefix: '/uploads/' })
 
     expect(config.publicUrl).toBe('https://cdn.example.com')
     expect(config.prefix).toBe('uploads')
   })
 
-  it('rejects a relative public URL', () => {
+  it('throws when the public URL is not absolute', () => {
     expect(() => resolveConfig({ bucket: 'b', publicUrl: '/uploads' })).toThrowError(/absolute URL/)
   })
 
-  it('rejects a non-positive maxSize', () => {
+  it('throws when maxSize is not a positive number', () => {
     expect(() => resolveConfig({ bucket: 'b', maxSize: 0 })).toThrowError(/positive number of bytes/)
   })
 })

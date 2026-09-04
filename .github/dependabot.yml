@@ -1,0 +1,35 @@
+version: 2
+
+updates:
+  # The AWS SDK ships several releases a week. Grouping keeps that to one pull
+  # request, and separating the package's runtime dependencies from everything
+  # else keeps the review of what actually reaches users small.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'deps'
+      prefix-development: 'chore'
+    groups:
+      aws-sdk:
+        patterns:
+          - '@aws-sdk/*'
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'ci'
+    groups:
+      actions:
+        patterns:
+          - '*'

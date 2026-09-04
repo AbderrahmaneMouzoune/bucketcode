@@ -17,7 +17,7 @@ export default tseslint.config(
   },
   {
     // Test doubles stand in for SDK types on purpose.
-    files: ['**/test/**/*.ts'],
+    files: ['**/*.test.ts', '**/test-helpers.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
     },
