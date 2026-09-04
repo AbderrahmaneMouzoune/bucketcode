@@ -67,21 +67,42 @@ docker run -p 9000:9000 -p 9001:9001 \
 
 ## Releasing
 
-Publishing is driven by the version field, not by tags:
+Releases are driven by [release-please](https://github.com/googleapis/release-please) and by the
+commit messages that land on `main`, which follow
+[Conventional Commits](https://www.conventionalcommits.org/). Pull requests are squash-merged, so
+the pull request title is the message that counts — CI checks its shape on every pull request.
 
-1. Bump `version` in `packages/bucketcode/package.json`.
-2. Write the release notes in [`CHANGELOG.md`](./CHANGELOG.md), between the
-   `<!-- release:start -->` and `<!-- release:end -->` markers.
-3. Merge to `main`.
+| A commit on `main`                         | Takes 0.1.0 to                         |
+| ------------------------------------------ | -------------------------------------- |
+| `fix: …`                                   | 0.1.1                                  |
+| `feat: …`                                  | 0.2.0                                  |
+| `feat!: …`, or a `BREAKING CHANGE:` footer | 0.2.0 — the major bump waits for 1.0.0 |
+| `chore: …`, `ci: …`, `docs: …`, `test: …`  | nowhere, no release                    |
 
-The [release workflow](./.github/workflows/release.yml) compares the local version to what is on
-npm. When they differ it publishes with provenance and opens a GitHub release named after the
-version, using the notes between those markers.
+Only commits touching `packages/bucketcode` release it; the docs site, the examples and the
+workflows do not.
 
-It expects an `NPM_TOKEN` repository secret with publish rights. If you would rather use npm
-trusted publishing, configure this repository as a trusted publisher on npm and drop the
-`NODE_AUTH_TOKEN` line from the workflow — the `id-token: write` permission it already grants is
-what OIDC needs.
+While there is something to release, the [release workflow](./.github/workflows/release.yml) keeps
+a `chore: release x.y.z` pull request open, carrying the version bump and the entry it would add to
+[the changelog](./packages/bucketcode/CHANGELOG.md). Merging it is the release: the commit is
+tagged `vx.y.z`, the GitHub release is created from that changelog entry, and the package is
+published to npm with provenance.
+
+[`release-please-config.json`](./release-please-config.json) holds the settings;
+[`.release-please-manifest.json`](./.release-please-manifest.json) holds the last released version
+and is rewritten by release-please, so leave it alone.
+
+Two repository secrets:
+
+- `NPM_TOKEN`, with publish rights. If you would rather use npm trusted publishing, configure this
+  repository as a trusted publisher on npm and drop the `NODE_AUTH_TOKEN` line from the workflow —
+  the `id-token: write` permission it already grants is what OIDC needs.
+- `RELEASE_PLEASE_TOKEN`, optional: a personal access token with `contents` and `pull-requests`
+  write access. GitHub skips workflows on pull requests opened with the default `GITHUB_TOKEN`, so
+  without it the release pull request shows no checks.
+
+Running the workflow by hand with **Publish** ticked publishes the version currently on `main` —
+the way out when a release was tagged but the publish step failed.
 
 ## License
 

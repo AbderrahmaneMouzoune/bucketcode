@@ -10,6 +10,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  commit-convention:
+    name: Conventional pull request title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # Pull requests are squash-merged, so this title becomes the commit message
+      # on main — the one release-please reads to decide the next version.
+      - name: Check the title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          TYPES='build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test'
+
+          if printf '%s' "$TITLE" | grep -qE "^($TYPES)(\([a-z0-9._/-]+\))?!?: .+"; then
+            echo "OK: $TITLE"
+          else
+            echo "The pull request title is not a conventional commit:"
+            echo ""
+            echo "  $TITLE"
+            echo ""
+            echo "Use '<type>[optional scope][!]: <description>', for example:"
+            echo "  feat: presign browser uploads"
+            echo "  fix(snapshots): honour expiresAt on read"
+            echo "  feat!: drop the callback form of getUrl"
+            echo ""
+            echo "Types: $TYPES. 'feat' and 'fix' release, the others do not."
+            exit 1
+          fi
+
   quality:
     name: Lint, types and build
     runs-on: ubuntu-latest
