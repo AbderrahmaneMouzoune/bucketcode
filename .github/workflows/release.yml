@@ -71,7 +71,11 @@ jobs:
 
       - run: pnpm --filter bucketcode test
 
-      - run: pnpm build
+      # Only the package, not the whole workspace: a docs-site build failure has
+      # no business blocking an npm publish.
+      - run: pnpm --filter bucketcode build
+
+      - run: pnpm --filter bucketcode check:exports
 
       # Drop NODE_AUTH_TOKEN and configure this repository as a trusted
       # publisher on npm to publish through OIDC instead of a token.

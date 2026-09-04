@@ -62,9 +62,19 @@ jobs:
 
       - run: pnpm lint
 
+      # Test-name conventions: no `should`, lowercase `it` titles, `it` over
+      # `test`, no duplicate or focused tests, at most two levels of describe.
+      - run: pnpm lint:tests
+
       - run: pnpm type-check
 
       - run: pnpm build
+
+      # publint and are-the-types-wrong catch what a green build does not: an
+      # exports map that hands CommonJS consumers ESM type declarations, a file
+      # referenced but not shipped, a condition in the wrong order.
+      - name: Check the published package
+        run: pnpm --filter bucketcode check:exports
 
   test:
     name: Test on Node ${{ matrix.node-version }}
@@ -88,4 +98,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm --filter bucketcode test
+      - run: pnpm --filter bucketcode test:coverage
+
+      - name: Upload coverage
+        if: matrix.node-version == '22'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: packages/bucketcode/coverage
+          retention-days: 7

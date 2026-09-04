@@ -238,12 +238,12 @@ export class Bucket {
    * bucket says what it is and what wrote it.
    */
   async putSnapshot(key: string, data: unknown, options: PutSnapshotOptions = {}): Promise<SnapshotResult> {
-    const createdAt = new Date()
-    const expiresAt = options.expiresIn != null ? new Date(createdAt.getTime() + options.expiresIn * 1000) : undefined
-
     if (options.expiresIn != null && (!Number.isFinite(options.expiresIn) || options.expiresIn <= 0)) {
       throw new BucketCodeError('INVALID_SNAPSHOT', '`expiresIn` must be a positive number of seconds.')
     }
+
+    const createdAt = new Date()
+    const expiresAt = options.expiresIn != null ? new Date(createdAt.getTime() + options.expiresIn * 1000) : undefined
 
     const compress = options.compress ?? true
 

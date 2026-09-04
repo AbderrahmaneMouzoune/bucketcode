@@ -13,6 +13,13 @@
     "test": {
       "dependsOn": ["^build"]
     },
+    "test:coverage": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "check:exports": {
+      "dependsOn": ["build"]
+    },
     "type-check": {
       "dependsOn": ["^build"]
     },
