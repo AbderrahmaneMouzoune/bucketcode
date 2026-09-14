@@ -16,8 +16,8 @@ the code into the second, and the database follows.
 
 ```sh
 cp .env.example .env.local
-pnpm install
-pnpm dev
+bun install
+bun run dev
 ```
 
 Then open http://localhost:3200 in two different browsers — two profiles, or one normal window and

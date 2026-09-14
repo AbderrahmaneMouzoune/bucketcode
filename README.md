@@ -32,28 +32,36 @@ npm install bucketcode
 
 ## This repository
 
-A pnpm workspace monorepo, driven by Turborepo.
+A bun workspace monorepo, driven by Turborepo.
 
 | Path                                                   | What it is                                                   |
 | ------------------------------------------------------ | ------------------------------------------------------------ |
-| [`packages/bucketcode`](./packages/bucketcode)         | The published package.                                       |
+| [`packages/bucketcode`](./packages/bucketcode)         | The published package, its transfer protocol and its CLI.    |
 | [`apps/docs`](./apps/docs)                             | The documentation site — guides, use cases, API reference.   |
 | [`examples/indexeddb-sync`](./examples/indexeddb-sync) | A notes app in IndexedDB, moved between devices with a code. |
 | [`examples/node-script`](./examples/node-script)       | Snapshot round-trip, expiry and conflicts in one file.       |
 
 ## Working on it
 
+A [bun](https://bun.com) workspace, with [Turborepo](https://turborepo.dev) running the tasks.
+
 ```sh
-pnpm install
-pnpm build        # turbo build across the workspace
-pnpm test         # the package's test suite
-pnpm type-check
-pnpm lint
-pnpm format
+bun install
+bun run build        # turbo build across the workspace
+bun run test         # the package's test suite
+bun run type-check
+bun run lint
+bun run format
 ```
 
-Run the docs site locally with `pnpm --filter @bucketcode/docs dev` — it listens on
+Run the docs site locally with `bun run --filter @bucketcode/docs dev` — it listens on
 [localhost:3100](http://localhost:3100).
+
+bun installs and orchestrates; the toolchain itself still runs on Node. That is deliberate rather
+than half-finished: `bucketcode` is published for Node, so the test suite runs on Node — CI runs it
+on 20, 22 and 24 — and `.bin/vitest` carries a `#!/usr/bin/env node` shebang, so it picks up
+whichever version is on `PATH`. Switching the runner to `bun test` would trade that coverage for a
+second or two of wall clock.
 
 The test suite is offline: it runs against an in-memory stand-in for S3 that honours the
 conditional headers, so snapshots genuinely round-trip without credentials or network. For an

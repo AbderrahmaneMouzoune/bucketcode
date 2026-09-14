@@ -4,8 +4,8 @@ The documentation site, built on [Fumadocs](https://fumadocs.dev) — Next.js Ap
 built-in search, table of contents and light/dark themes.
 
 ```sh
-pnpm --filter @bucketcode/docs dev    # localhost:3100
-pnpm --filter @bucketcode/docs build
+bun run --filter @bucketcode/docs dev    # localhost:3100
+bun run --filter @bucketcode/docs build
 ```
 
 ## Where the content lives

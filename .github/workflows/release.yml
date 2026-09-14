@@ -55,23 +55,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
 
+      # npm, not bun, does the publishing below: provenance is minted from the
+      # OIDC token npm exchanges with the registry.
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-          cache: pnpm
           registry-url: 'https://registry.npmjs.org'
 
-      - run: pnpm install --frozen-lockfile
+      - run: bun install --frozen-lockfile
 
-      - run: pnpm lint
+      - run: bun run lint
 
-      - run: pnpm type-check
+      - run: bun run type-check
 
-      - run: pnpm --filter bucketcode test
+      - run: bunx turbo test --filter=bucketcode
 
-      - run: pnpm build
+      - run: bun run build
 
       # Drop NODE_AUTH_TOKEN and configure this repository as a trusted
       # publisher on npm to publish through OIDC instead of a token.

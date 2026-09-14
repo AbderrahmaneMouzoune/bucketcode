@@ -6,7 +6,7 @@ you point bucketcode at a new bucket or a new provider.
 
 ```sh
 cp .env.example .env
-pnpm install
+bun install
 node --env-file=.env --import tsx src/round-trip.ts
 ```
 
