@@ -1,8 +1,83 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { createBucket } from '../src/bucket.js'
+import { createBucket } from 'bucketcode'
+import type { S3Client } from '@aws-sdk/client-s3'
+
 import { runChecks, type Check } from '../src/doctor.js'
-import { createMemoryClient } from './helpers.js'
+
+/**
+ * A stand-in shaped to exactly what `doctor` exercises: the three object verbs,
+ * HeadBucket, and the lifecycle configuration. Purpose-built rather than shared
+ * with the core package's test helpers, so the CLI's tests do not depend on
+ * another package's test internals.
+ */
+function createDoctorClient() {
+  const objects = new Map<string, Buffer>()
+  let lifecycle: Record<string, any>[] | undefined
+
+  const send = vi.fn(async (command: any) => {
+    const name = command.constructor.name
+    const { Key, Body } = command.input ?? {}
+
+    if (name === 'HeadBucketCommand') return {}
+
+    if (name === 'PutObjectCommand') {
+      objects.set(Key, Buffer.from(Body))
+      return { ETag: '"etag"' }
+    }
+
+    if (name === 'GetObjectCommand') {
+      const stored = objects.get(Key)
+      if (!stored) {
+        throw Object.assign(new Error('missing'), { name: 'NoSuchKey', $metadata: { httpStatusCode: 404 } })
+      }
+
+      return {
+        Body: {
+          transformToByteArray: async () => stored,
+          transformToString: async () => stored.toString('utf8'),
+        },
+        ContentType: 'text/plain',
+        ContentLength: stored.byteLength,
+        Metadata: {},
+        ETag: '"etag"',
+      }
+    }
+
+    if (name === 'DeleteObjectCommand') {
+      objects.delete(Key)
+      return {}
+    }
+
+    if (name === 'GetBucketLifecycleConfigurationCommand') {
+      if (lifecycle === undefined) {
+        throw Object.assign(new Error('none'), {
+          name: 'NoSuchLifecycleConfiguration',
+          $metadata: { httpStatusCode: 404 },
+        })
+      }
+
+      return { Rules: lifecycle }
+    }
+
+    throw new Error(`Unexpected command: ${name}`)
+  })
+
+  return {
+    client: {
+      send,
+      destroy: vi.fn(),
+      config: {
+        region: 'eu-west-3',
+        credentials: async () => ({ accessKeyId: 'AKIAEXAMPLE1234', secretAccessKey: 'secret' }),
+      },
+    } as unknown as S3Client,
+    objects,
+    setLifecycle(rules: Record<string, any>[] | undefined) {
+      lifecycle = rules
+    },
+  }
+}
 
 function find(checks: Check[], name: string): Check {
   const check = checks.find((candidate) => candidate.name === name)
@@ -13,7 +88,7 @@ function find(checks: Check[], name: string): Check {
 
 describe('runChecks', () => {
   it('reports a healthy bucket', async () => {
-    const memory = createMemoryClient()
+    const memory = createDoctorClient()
     memory.setLifecycle([{ Status: 'Enabled', Expiration: { Days: 2 }, Filter: { Prefix: '' } }])
 
     const checks = await runChecks(createBucket({ bucket: 'transfers', client: memory.client }))
@@ -24,7 +99,7 @@ describe('runChecks', () => {
   })
 
   it('never prints the whole access key', async () => {
-    const memory = createMemoryClient()
+    const memory = createDoctorClient()
     const checks = await runChecks(createBucket({ bucket: 'transfers', client: memory.client }))
 
     const detail = find(checks, 'Credentials').detail
@@ -33,14 +108,14 @@ describe('runChecks', () => {
   })
 
   it('leaves no probe object behind', async () => {
-    const memory = createMemoryClient()
+    const memory = createDoctorClient()
     await runChecks(createBucket({ bucket: 'transfers', client: memory.client }))
 
     expect(memory.objects.size).toBe(0)
   })
 
   it('warns when nothing will ever delete an expired transfer', async () => {
-    const memory = createMemoryClient()
+    const memory = createDoctorClient()
     // setLifecycle was never called: the bucket has no configuration at all.
     const checks = await runChecks(createBucket({ bucket: 'transfers', client: memory.client }))
 
@@ -50,7 +125,7 @@ describe('runChecks', () => {
   })
 
   it('warns when the rules exist but miss the prefix in use', async () => {
-    const memory = createMemoryClient()
+    const memory = createDoctorClient()
     memory.setLifecycle([{ Status: 'Enabled', Expiration: { Days: 1 }, Filter: { Prefix: 'somewhere-else/' } }])
 
     const checks = await runChecks(
@@ -62,7 +137,7 @@ describe('runChecks', () => {
   })
 
   it('accepts a rule whose prefix covers the one in use', async () => {
-    const memory = createMemoryClient()
+    const memory = createDoctorClient()
     memory.setLifecycle([{ Status: 'Enabled', Expiration: { Days: 1 }, Filter: { Prefix: 'snap' } }])
 
     const checks = await runChecks(
@@ -74,7 +149,7 @@ describe('runChecks', () => {
   })
 
   it('ignores a disabled rule', async () => {
-    const memory = createMemoryClient()
+    const memory = createDoctorClient()
     memory.setLifecycle([{ Status: 'Disabled', Expiration: { Days: 1 }, Filter: { Prefix: '' } }])
 
     const checks = await runChecks(createBucket({ bucket: 'transfers', client: memory.client }))

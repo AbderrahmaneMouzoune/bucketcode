@@ -1,7 +1,7 @@
 import { GetBucketLifecycleConfigurationCommand, HeadBucketCommand } from '@aws-sdk/client-s3'
 import { randomUUID } from 'node:crypto'
 
-import type { Bucket } from './bucket.js'
+import type { Bucket } from 'bucketcode'
 
 export type CheckStatus = 'ok' | 'warn' | 'fail'
 

@@ -3,12 +3,10 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { basename, resolve as resolvePath } from 'node:path'
 import { parseArgs } from 'node:util'
 
-import { createBucket } from './bucket.js'
+import { createBucket, createTransferHandler, isBucketCodeError } from 'bucketcode'
+import { createTransferClient, isTransferError, type TransferClient } from '@bucketcode/protocol'
+
 import { runChecks, type Check } from './doctor.js'
-import { createTransferHandler } from './handler.js'
-import { isBucketCodeError } from './errors.js'
-import { lookupContentType } from './mime.js'
-import { createTransferClient, isTransferError, type TransferClient } from './protocol/index.js'
 
 declare const __VERSION__: string
 
@@ -126,11 +124,7 @@ async function commandPut(client: TransferClient, flags: Flags, file: string): P
   const filename = basename(path)
   const bytes = await readFile(path)
 
-  const created = await client.createFile({
-    body: bytes,
-    filename,
-    contentType: lookupContentType(filename),
-  })
+  const created = await client.createFile({ body: bytes, filename })
 
   emit(flags.json, created, () => {
     out(created.code)
