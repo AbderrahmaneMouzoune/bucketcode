@@ -3,19 +3,22 @@ title: 'CLI'
 description: 'bucketcode from a terminal: move a file between machines, and check that a bucket is actually set up to hold transfers.'
 ---
 
-The CLI ships inside the package, so anywhere `bucketcode` is installed you can run it without
-installing anything else:
+`@bucketcode/cli` is its own package, built on `bucketcode` as a primitive — so nothing a command
+line needs ships to your server.
 
 ```sh
-npx bucketcode doctor
+npx @bucketcode/cli doctor
 ```
 
 Or globally, for the drop-box use:
 
 ```sh
-npm install -g bucketcode
+npm install -g @bucketcode/cli
 bucketcode put ./report.pdf
 ```
+
+It has no dependencies of its own beyond `bucketcode`: `node:util`'s `parseArgs` is the whole
+argument parser.
 
 ## `doctor`
 

@@ -1,0 +1,169 @@
+---
+title: 'React'
+description: 'Hooks for sending and receiving transfers, and an input that repairs the code as the user types it.'
+---
+
+```sh
+npm install @bucketcode/react
+```
+
+`@bucketcode/react` never sees a storage credential and never pulls a storage client. Its whole
+dependency tree is `@bucketcode/protocol` and nanoid, with React as a peer — the AWS SDK stays on
+your server, where `bucketcode` runs.
+
+That is the reason it is a separate package. If the hooks lived in `bucketcode`, installing them
+would put `@aws-sdk/client-s3` in every front-end's `node_modules` for code that can never run
+there.
+
+Every export is a client hook and the build carries `'use client'`, so it drops straight into the
+App Router.
+
+## Setting it up
+
+Point the provider at wherever you mounted [the transfer routes](/docs/protocol):
+
+```tsx title="app/providers.tsx"
+'use client'
+
+import { BucketcodeProvider } from '@bucketcode/react'
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return <BucketcodeProvider baseUrl="/api/transfers">{children}</BucketcodeProvider>
+}
+```
+
+Pass `headers` for a token. Pass `client` to bring your own — which is how you drive the hooks in
+tests, with no network at all:
+
+```tsx
+<BucketcodeProvider client={fakeClient}>{children}</BucketcodeProvider>
+```
+
+## The sending device
+
+```tsx
+import { useSendTransfer } from '@bucketcode/react'
+
+function MoveToAnotherDevice() {
+  const { send, transfer, isPending, error } = useSendTransfer()
+
+  async function handleClick() {
+    await send(await exportDatabase(), { version: SCHEMA_VERSION, device: 'This laptop' })
+  }
+
+  return (
+    <>
+      <button onClick={handleClick} disabled={isPending}>
+        Move to another device
+      </button>
+
+      {transfer && <p>Type this on the other device: {transfer.code}</p>}
+      {error && <p role="alert">{error.message}</p>}
+    </>
+  )
+}
+```
+
+`sendFile` takes a `File` straight off an `<input type="file">`, keeping its name and content type:
+
+```tsx
+const { sendFile } = useSendTransfer()
+
+<input type="file" onChange={(event) => event.target.files?.[0] && sendFile(event.target.files[0])} />
+```
+
+<Callout>
+  Failures land in `error` rather than rejecting — an event handler should not need a `try`/`catch` around every call.
+  The call returns `null` when it failed, for callers that want to branch on it.
+</Callout>
+
+## The receiving device
+
+```tsx
+import { useReceiveTransfer, useSyncCodeInput } from '@bucketcode/react'
+
+function RestoreFromCode() {
+  const input = useSyncCodeInput()
+  const { load, transfer, data, notFound, isPending, burn } = useReceiveTransfer<DatabaseDump>()
+
+  async function apply() {
+    await importDatabase(data!)
+    await burn(transfer!.code)
+  }
+
+  return (
+    <>
+      <input {...input.inputProps} placeholder="K7QP2M4X" />
+      <button onClick={() => input.code && load(input.code)} disabled={!input.isComplete || isPending}>
+        Look it up
+      </button>
+
+      {notFound && <p>Unknown or expired code.</p>}
+
+      {transfer && (
+        <>
+          <p>
+            From {transfer.device}, {new Date(transfer.createdAt).toLocaleString()}
+          </p>
+          <button onClick={apply}>Replace my data</button>
+        </>
+      )}
+    </>
+  )
+}
+```
+
+Looking a code up and applying what it holds are deliberately separate. Only your code knows its own
+object stores, and the user should see what is about to replace their data before it does — which is
+what `transfer.device` and `transfer.createdAt` are for.
+
+Burning the code after a successful restore is a good habit; expiry is the backstop if it never
+runs.
+
+## The code input
+
+`useSyncCodeInput` does the repair in the browser, before any request: separators dropped, case
+folded, and `O`/`I`/`L` read as `0`/`1`/`1` where the alphabet makes that unambiguous.
+
+```tsx
+const { value, code, isComplete, error, reset, inputProps } = useSyncCodeInput()
+```
+
+|              |                                                               |
+| ------------ | ------------------------------------------------------------- |
+| `value`      | What the user typed, untouched                                |
+| `code`       | The canonical form to submit, `null` while it cannot be one   |
+| `isComplete` | True once `code` is the full configured length                |
+| `error`      | Set when the input holds a character the alphabet cannot have |
+| `inputProps` | Keyboard and autofill hints for a one-time code               |
+
+What the user typed stays in `value` and the field is never rewritten under their cursor — that is
+the one thing that makes these inputs miserable to use. The normalized form lives alongside it.
+
+Pass the same shape your server configured, and the keyboard follows:
+
+```tsx
+useSyncCodeInput({ length: 4, alphabet: '0123456789' }) // inputProps.inputMode becomes "numeric"
+```
+
+See [configuring codes](/docs/code-configuration) for what each shape is worth against a guessing
+attacker.
+
+## Concurrency
+
+Every call aborts the one before it, a late reply from a superseded call is dropped rather than
+published, and nothing is written after unmount.
+
+The practical version: a user hammering the button does not end up looking at whichever request
+happened to finish last.
+
+## Reference
+
+| Hook                   | Returns                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| `useSendTransfer()`    | `send`, `sendFile`, `transfer`, `status`, `isPending`, `error`, `reset`                              |
+| `useReceiveTransfer()` | `load`, `loadBytes`, `burn`, `transfer`, `data`, `notFound`, `status`, `isPending`, `error`, `reset` |
+| `useSyncCodeInput()`   | `value`, `setValue`, `code`, `isComplete`, `error`, `reset`, `inputProps`                            |
+| `useTransferClient()`  | The underlying client, for anything the hooks do not cover                                           |
+
+`status` is `'idle' | 'pending' | 'success' | 'error'`.

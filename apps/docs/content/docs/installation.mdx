@@ -19,6 +19,19 @@ yarn add bucketcode
 bun add bucketcode
 ```
 
+That is the server-side package. Depending on what you are building you may want one of the
+others instead, or as well:
+
+| Package                | Install it when                                                   |
+| ---------------------- | ----------------------------------------------------------------- |
+| `bucketcode`           | Your server talks to the bucket. Brings the AWS SDK.              |
+| `@bucketcode/react`    | Your React app sends or receives transfers. Never pulls the SDK.  |
+| `@bucketcode/cli`      | You want the `bucketcode` command. Install it globally.           |
+| `@bucketcode/protocol` | You are writing a client or server for a runtime the others miss. |
+
+`@bucketcode/react` depends on `@bucketcode/protocol`, never on `bucketcode`, so a front-end
+install does not drag a storage client into `node_modules`.
+
 Node 20 or later — that is what AWS SDK v3 requires. `@aws-sdk/client-s3` and
 `@aws-sdk/s3-request-presigner` come along as dependencies, so there is nothing else to install
 and no peer dependency to satisfy.

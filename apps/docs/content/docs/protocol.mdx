@@ -43,7 +43,7 @@ Return `false` for a plain 401, or a `Response` to answer with your own.
 ## Talking to it
 
 ```ts
-import { createTransferClient } from 'bucketcode/protocol'
+import { createTransferClient } from '@bucketcode/protocol'
 
 const transfers = createTransferClient({ baseUrl: 'https://drop.example.com/api/transfers' })
 
@@ -51,8 +51,12 @@ const { code } = await transfers.createSnapshot({ data: state, version: 3 })
 const incoming = await transfers.read(typedCode) // null when unknown or expired
 ```
 
-`bucketcode/protocol` is `fetch` and nothing else — no path from it reaches the AWS SDK, so it
-bundles for a browser, a worker or React Native without dragging a storage client along.
+`@bucketcode/protocol` is `fetch` and nothing else. Its whole dependency tree is nanoid, and no
+path from it reaches the AWS SDK — so it bundles for a browser, a worker or React Native without
+dragging a storage client along. That is the reason it is a separate package rather than a subpath
+of `bucketcode`: a subpath would have put the SDK in every front-end's `node_modules`.
+
+In React you rarely call it directly — [the hooks](/docs/react) wrap it.
 
 ## The routes
 
@@ -134,7 +138,7 @@ Clients throw `TransferError`, which carries that `code` — branch on it rather
 or message text:
 
 ```ts
-import { isTransferError } from 'bucketcode/protocol'
+import { isTransferError } from '@bucketcode/protocol'
 
 try {
   await transfers.createSnapshot({ data: state })

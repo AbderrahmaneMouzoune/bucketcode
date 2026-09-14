@@ -34,12 +34,26 @@ npm install bucketcode
 
 A bun workspace monorepo, driven by Turborepo.
 
-| Path                                                   | What it is                                                   |
-| ------------------------------------------------------ | ------------------------------------------------------------ |
-| [`packages/bucketcode`](./packages/bucketcode)         | The published package, its transfer protocol and its CLI.    |
-| [`apps/docs`](./apps/docs)                             | The documentation site — guides, use cases, API reference.   |
-| [`examples/indexeddb-sync`](./examples/indexeddb-sync) | A notes app in IndexedDB, moved between devices with a code. |
-| [`examples/node-script`](./examples/node-script)       | Snapshot round-trip, expiry and conflicts in one file.       |
+| Path                                                   | What it is                                                                                                        |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| [`packages/protocol`](./packages/protocol)             | `@bucketcode/protocol` — the wire contract, a client, sync codes. No storage client, so it bundles for a browser. |
+| [`packages/bucketcode`](./packages/bucketcode)         | `bucketcode` — the S3 primitive: snapshots, files, the handler.                                                   |
+| [`packages/react`](./packages/react)                   | `@bucketcode/react` — hooks. Depends on the protocol, never on S3.                                                |
+| [`packages/cli`](./packages/cli)                       | `@bucketcode/cli` — the `bucketcode` binary, built on the primitive.                                              |
+| [`apps/docs`](./apps/docs)                             | The documentation site — guides, use cases, API reference.                                                        |
+| [`examples/indexeddb-sync`](./examples/indexeddb-sync) | A notes app in IndexedDB, moved between devices with a code.                                                      |
+| [`examples/node-script`](./examples/node-script)       | Snapshot round-trip, expiry and conflicts in one file.                                                            |
+
+The split follows one constraint: a browser must never end up with a storage client in its
+dependency tree. `@bucketcode/protocol` is what both halves share, which is why it exists at all
+rather than living inside `bucketcode`.
+
+```
+@bucketcode/protocol   nanoid                      the contract, shared by everything
+bucketcode             + aws-sdk, protocol         the S3 primitive
+@bucketcode/react      + protocol, react (peer)    hooks — no path to S3
+@bucketcode/cli        + bucketcode                the binary
+```
 
 ## Working on it
 
