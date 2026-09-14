@@ -1,0 +1,74 @@
+{
+  "name": "@bucketcode/react",
+  "version": "0.1.0",
+  "description": "React hooks for bucketcode transfers: send a snapshot or a file, read a code back, and a sync code input that repairs what the user typed.",
+  "keywords": [
+    "bucketcode",
+    "react",
+    "hooks",
+    "local-first",
+    "indexeddb",
+    "sync",
+    "transfer",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Abderrahmane Mouzoune",
+  "homepage": "https://github.com/AbderrahmaneMouzoune/bucketcode/tree/main/packages/react#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AbderrahmaneMouzoune/bucketcode.git",
+    "directory": "packages/react"
+  },
+  "bugs": {
+    "url": "https://github.com/AbderrahmaneMouzoune/bucketcode/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "@bucketcode/protocol": "^0.1.0"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "happy-dom": "^20.0.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tsup": "^8.5.1",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11"
+  }
+}
