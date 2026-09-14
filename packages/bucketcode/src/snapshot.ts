@@ -1,6 +1,6 @@
 import { gunzipSync, gzipSync } from 'node:zlib'
 
-import { BucketCodeError } from './errors.js'
+import { BucketCodeError } from '@bucketcode/protocol'
 import type { SnapshotEnvelope } from './types.js'
 
 /** Bumped only if the envelope shape itself changes, never for your own data. */

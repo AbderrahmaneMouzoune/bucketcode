@@ -1,4 +1,4 @@
-import { parseTransferErrorBody, TransferError } from './error.js'
+import { parseTransferErrorBody, TransferError } from './transfer-error.js'
 import { FILENAME_HEADER } from './types.js'
 import type { CreatedTransfer, CreateSnapshotBody, TransferMetadata } from './types.js'
 

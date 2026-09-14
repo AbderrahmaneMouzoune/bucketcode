@@ -1,28 +1,22 @@
 {
-  "name": "bucketcode",
+  "name": "@bucketcode/protocol",
   "version": "0.1.0",
-  "description": "Move a local-first app's data between devices through your own S3 bucket: snapshots, sync codes and a transfer handler. Works with AWS S3, Cloudflare R2, MinIO and any S3-compatible storage.",
+  "description": "The bucketcode transfer protocol: the wire contract, a fetch-based client, and sync codes. No storage client, so it bundles for a browser.",
   "keywords": [
-    "s3",
-    "upload",
-    "aws",
-    "r2",
-    "minio",
-    "storage",
-    "bucket",
+    "bucketcode",
+    "protocol",
+    "sync-code",
     "local-first",
-    "sync",
-    "indexeddb",
-    "nextjs",
+    "transfer",
     "typescript"
   ],
   "license": "MIT",
   "author": "Abderrahmane Mouzoune",
-  "homepage": "https://github.com/AbderrahmaneMouzoune/bucketcode#readme",
+  "homepage": "https://github.com/AbderrahmaneMouzoune/bucketcode/tree/main/packages/protocol#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AbderrahmaneMouzoune/bucketcode.git",
-    "directory": "packages/bucketcode"
+    "directory": "packages/protocol"
   },
   "bugs": {
     "url": "https://github.com/AbderrahmaneMouzoune/bucketcode/issues"
@@ -62,9 +56,7 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.700.0",
-    "@aws-sdk/s3-request-presigner": "^3.700.0",
-    "@bucketcode/protocol": "^0.1.0"
+    "nanoid": "^6.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

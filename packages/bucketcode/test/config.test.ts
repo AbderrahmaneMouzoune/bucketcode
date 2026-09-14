@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { resolveConfig } from '../src/config.js'
-import type { BucketCodeError } from '../src/errors.js'
+import type { BucketCodeError } from '@bucketcode/protocol'
 import { clearBucketEnv } from './helpers.js'
 
 beforeEach(clearBucketEnv)

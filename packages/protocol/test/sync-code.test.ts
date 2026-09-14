@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createBucket } from '../src/bucket.js'
-import { createSyncCode, createSyncCodes, normalizeSyncCode, syncCodeAlphabets } from '../src/sync-code.js'
-import { createStubClient } from './helpers.js'
+import { createSyncCode, createSyncCodes, normalizeSyncCode, syncCodeAlphabets } from '../src/index.js'
 
 describe('the default scheme', () => {
   it('is eight characters of Crockford base32', () => {
@@ -108,28 +106,5 @@ describe('a custom alphabet', () => {
 
   it.each([0, -1, 65, 4.5])('rejects a length of %s', (length) => {
     expect(() => createSyncCodes({ length })).toThrowError(expect.objectContaining({ code: 'INVALID_CONFIG' }))
-  })
-})
-
-describe('store.codes', () => {
-  it('follows the scheme configured on the bucket', () => {
-    const { client } = createStubClient()
-    const store = createBucket({
-      bucket: 'assets',
-      syncCode: { length: 4, alphabet: syncCodeAlphabets.digits },
-      client,
-    })
-
-    expect(store.codes.create()).toMatch(/^\d{4}$/)
-    expect(store.codes.normalize('1-2 3O')).toBe('1230')
-    expect(store.codes.length).toBe(4)
-  })
-
-  it('defaults to the Crockford scheme', () => {
-    const { client } = createStubClient()
-    const store = createBucket({ bucket: 'assets', client })
-
-    expect(store.codes.alphabet).toBe(syncCodeAlphabets.crockford)
-    expect(store.codes.create()).toHaveLength(8)
   })
 })

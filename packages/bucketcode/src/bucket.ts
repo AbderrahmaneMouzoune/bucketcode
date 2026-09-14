@@ -10,11 +10,11 @@ import type { Readable } from 'node:stream'
 
 import { normalizeBody } from './body.js'
 import { createS3Client, resolveConfig } from './config.js'
-import { BucketCodeError } from './errors.js'
+import { BucketCodeError } from '@bucketcode/protocol'
 import { assertValidKey, encodeKey, generateKey, joinKey, normalizePrefix, sanitizeFilename } from './key.js'
 import { DEFAULT_CONTENT_TYPE, lookupContentType } from './mime.js'
 import { decodeSnapshot, encodeSnapshot, ENVELOPE_VERSION } from './snapshot.js'
-import { createSyncCodes } from './sync-code.js'
+import { createSyncCodes } from '@bucketcode/protocol'
 import type {
   BucketConfig,
   GetOptions,

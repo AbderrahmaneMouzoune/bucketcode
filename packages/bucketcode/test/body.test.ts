@@ -3,7 +3,7 @@ import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 
 import { normalizeBody } from '../src/body.js'
-import type { BucketCodeError } from '../src/errors.js'
+import type { BucketCodeError } from '@bucketcode/protocol'
 
 describe('normalizeBody', () => {
   it('rejects a missing body', async () => {

@@ -1,6 +1,6 @@
 import { customAlphabet } from 'nanoid'
 
-import { BucketCodeError } from './errors.js'
+import { BucketCodeError } from './bucket-code-error.js'
 import type { SyncCodeOptions, SyncCodes } from './types-codes.js'
 
 /**

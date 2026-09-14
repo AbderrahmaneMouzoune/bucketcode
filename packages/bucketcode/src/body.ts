@@ -1,6 +1,6 @@
 import type { Readable } from 'node:stream'
 
-import { BucketCodeError } from './errors.js'
+import { BucketCodeError } from '@bucketcode/protocol'
 import { DEFAULT_CONTENT_TYPE } from './mime.js'
 import type { UploadBody } from './types.js'
 

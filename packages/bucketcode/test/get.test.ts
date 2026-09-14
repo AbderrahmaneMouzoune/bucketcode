@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBucket } from '../src/bucket.js'
-import type { BucketCodeError } from '../src/errors.js'
+import type { BucketCodeError } from '@bucketcode/protocol'
 import { clearBucketEnv, createStubClient, notFoundError, s3Body } from './helpers.js'
 
 beforeEach(clearBucketEnv)

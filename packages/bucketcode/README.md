@@ -95,12 +95,12 @@ createTransferHandler({
 })
 ```
 
-The browser half is `bucketcode/protocol`, which is `fetch` and nothing else — no path from it
-reaches the AWS SDK, so it bundles for a browser or React Native without dragging a storage client
-along:
+The browser half is a separate package, `@bucketcode/protocol`, whose whole dependency tree is
+nanoid — no path from it reaches the AWS SDK, so it bundles for a browser or React Native without
+dragging a storage client along:
 
 ```ts
-import { createTransferClient } from 'bucketcode/protocol'
+import { createTransferClient } from '@bucketcode/protocol'
 
 const transfers = createTransferClient({ baseUrl: '/api/transfers' })
 
@@ -108,48 +108,26 @@ const { code } = await transfers.createSnapshot({ data: state, version: 3 })
 const incoming = await transfers.read(typed) // null when unknown or expired
 ```
 
+In React, [`@bucketcode/react`](https://www.npmjs.com/package/@bucketcode/react) wraps that in
+hooks: `useSendTransfer`, `useReceiveTransfer`, and an input that repairs the code as the user
+types it.
+
 Writing the routes by hand stays perfectly reasonable when you want different shapes or different
 semantics — the handler is built on the same public methods you would call yourself, and
 `store.codes`, `putSnapshot()` and `getSnapshot()` are unchanged.
 
 ## The CLI
 
-The package ships a binary, so anywhere bucketcode is installed:
+[`@bucketcode/cli`](https://www.npmjs.com/package/@bucketcode/cli) is a separate package built on
+this one, so nothing a command line needs ships to your server:
 
 ```sh
-npx bucketcode doctor
+npx @bucketcode/cli doctor
 ```
 
-`doctor` performs the operations bucketcode needs and reports what happened, rather than reading
-your bucket policy and reasoning about it:
-
-```
-✓ Configuration: bucket "transfers", region "eu-west-3"
-✓ Credentials: resolved, key ends in 1234
-✓ Bucket reachable: HeadBucket succeeded
-✓ Write, read, delete: round-tripped a probe object
-! Expiry cleanup: no enabled expiration rule
-  → Add an S3 lifecycle rule that expires objects under this bucket after a day or two.
-```
-
-That last check is the one that earns the command: `expiresIn` stops a transfer being _handed
-over_, but only a lifecycle rule deletes the object, and nothing surfaces the gap until a bill
-does.
-
-`put`, `get` and `rm` move files. The code goes to stdout and everything else to stderr, so it
-composes:
-
-```sh
-CODE=$(bucketcode put ./report.pdf)
-bucketcode get "$CODE" -o ./report.pdf   # on the other machine
-```
-
-Every command takes `--remote`, pointing it at your own deployment of the protocol instead of at
-S3 — so the machine you run it from needs a token rather than credentials:
-
-```sh
-bucketcode --remote https://drop.example.com/api/transfers put ./report.pdf
-```
+`doctor` performs the operations bucketcode needs and reports what happened — including whether a
+lifecycle rule will actually delete your expired transfers, which is the one thing nobody discovers
+until a bill arrives. `put`, `get` and `rm` move files between machines with a code.
 
 ## Sync codes
 
@@ -187,12 +165,12 @@ store.codes.normalize('OIL5ABCD') // → "0115ABCD"
 store; prefer `store.codes` in application code, since configuring the shape in one place is what
 keeps the two sides in agreement.
 
-They are also available on their own from `bucketcode/codes`, which has no path to the AWS SDK —
-so the input that repairs a code as the user types it can run in the browser, before any network
-call:
+They are re-exported here from `@bucketcode/protocol`, which owns them — a sync code _is_ part of
+the contract between the two devices. Import them from there when you need them in a browser, so
+the repair can happen as the user types, before any network call:
 
 ```ts
-import { normalizeSyncCode } from 'bucketcode/codes'
+import { normalizeSyncCode } from '@bucketcode/protocol'
 ```
 
 **A sync code is a bearer token.** Anyone who has it can read that snapshot. Give it a short

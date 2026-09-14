@@ -1,7 +1,7 @@
 import type { ObjectCannedACL, S3Client } from '@aws-sdk/client-s3'
 import type { Readable } from 'node:stream'
 
-import type { SyncCodeOptions } from './types-codes.js'
+import type { SyncCodeOptions } from '@bucketcode/protocol'
 
 /**
  * Everything `upload()` accepts. Streams are part of the signature from v0.1
@@ -238,4 +238,4 @@ export interface Snapshot<T = unknown> {
   size?: number
 }
 
-export type { SyncCodeOptions, SyncCodes } from './types-codes.js'
+export type { SyncCodeOptions, SyncCodes } from '@bucketcode/protocol'

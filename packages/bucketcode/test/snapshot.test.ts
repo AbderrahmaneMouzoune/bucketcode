@@ -3,7 +3,7 @@ import { gunzipSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBucket } from '../src/bucket.js'
-import type { BucketCodeError } from '../src/errors.js'
+import type { BucketCodeError } from '@bucketcode/protocol'
 import { clearBucketEnv, createMemoryClient, createStubClient } from './helpers.js'
 
 beforeEach(clearBucketEnv)

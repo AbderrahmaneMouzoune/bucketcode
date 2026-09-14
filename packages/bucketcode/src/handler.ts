@@ -1,9 +1,9 @@
 import { Readable } from 'node:stream'
 
 import type { Bucket } from './bucket.js'
-import { BucketCodeError, isBucketCodeError } from './errors.js'
-import { FILENAME_HEADER, TRANSFER_ERROR_STATUS } from './protocol/types.js'
-import type { CreatedTransfer, CreateSnapshotBody, TransferErrorCode, TransferMetadata } from './protocol/types.js'
+import { BucketCodeError, isBucketCodeError } from '@bucketcode/protocol'
+import { FILENAME_HEADER, TRANSFER_ERROR_STATUS } from '@bucketcode/protocol'
+import type { CreatedTransfer, CreateSnapshotBody, TransferErrorCode, TransferMetadata } from '@bucketcode/protocol'
 
 /** Marks a stored object as opaque bytes rather than a snapshot envelope. */
 const KIND_METADATA_KEY = 'bucketcode-kind'
@@ -80,6 +80,13 @@ function fromBucketCodeError(error: BucketCodeError): Response {
     default:
       return fail('INTERNAL', error.message)
   }
+}
+
+/** The content type the client actually committed to, if it committed to one. */
+function declaredContentType(request: Request): string | undefined {
+  const declared = request.headers.get('content-type')?.split(';')[0]?.trim()
+
+  return declared && declared !== 'application/octet-stream' ? declared : undefined
 }
 
 function decodeHeaderValue(value: string | null): string | undefined {
@@ -202,7 +209,9 @@ export function createTransferHandler(config: TransferHandlerConfig): TransferHa
     const created = await claimCode(async (code) => {
       const result = await bucket.put(code, bytes, {
         filename,
-        contentType: request.headers.get('content-type') ?? undefined,
+        // A generic octet-stream means the client did not know; let upload()
+        // infer from the filename rather than freezing in the placeholder.
+        contentType: declaredContentType(request),
         cacheControl: 'private, no-store',
         metadata: {
           [KIND_METADATA_KEY]: 'file',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { BucketCodeError } from '../src/errors.js'
+import { BucketCodeError } from '@bucketcode/protocol'
 import { assertValidKey, encodeKey, generateKey, joinKey, normalizePrefix, sanitizeFilename } from '../src/key.js'
 
 describe('assertValidKey', () => {

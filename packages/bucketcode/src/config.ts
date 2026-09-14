@@ -1,6 +1,6 @@
 import { S3Client } from '@aws-sdk/client-s3'
 
-import { BucketCodeError } from './errors.js'
+import { BucketCodeError } from '@bucketcode/protocol'
 import { normalizePrefix } from './key.js'
 import type { BucketConfig, ResolvedConfig } from './types.js'
 

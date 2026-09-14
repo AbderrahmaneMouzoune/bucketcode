@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { BucketCodeError } from './errors.js'
+import { BucketCodeError } from '@bucketcode/protocol'
 
 /** S3 hard limit: an object key is at most 1024 bytes of UTF-8. */
 const MAX_KEY_BYTES = 1024
