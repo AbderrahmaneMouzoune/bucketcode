@@ -1,4 +1,5 @@
 import type { S3Client } from '@aws-sdk/client-s3'
+import { Readable } from 'node:stream'
 import { vi } from 'vitest'
 
 export interface StubCall {
@@ -64,9 +65,16 @@ export function notFoundError(): Error {
 export function createMemoryClient() {
   const objects = new Map<
     string,
-    { body: Uint8Array; contentType?: string; metadata?: Record<string, string>; etag: string }
+    {
+      body: Uint8Array
+      contentType?: string
+      metadata?: Record<string, string>
+      etag: string
+      lastModified: Date
+    }
   >()
   let counter = 0
+  let lifecycle: Record<string, any>[] | undefined
 
   function precondition(message: string): Error {
     return Object.assign(new Error(message), {
@@ -96,6 +104,7 @@ export function createMemoryClient() {
         contentType: input.ContentType,
         metadata: input.Metadata,
         etag,
+        lastModified: new Date(),
       })
 
       return { ETag: `"${etag}"` }
@@ -110,12 +119,13 @@ export function createMemoryClient() {
       }
 
       return {
-        Body: {
+        Body: Object.assign(Readable.from([Buffer.from(stored.body)]), {
           transformToByteArray: async () => stored.body,
           transformToString: async () => Buffer.from(stored.body).toString('utf8'),
-        },
+        }),
         ContentType: stored.contentType,
         ContentLength: stored.body.byteLength,
+        LastModified: stored.lastModified,
         Metadata: stored.metadata ?? {},
         ETag: `"${stored.etag}"`,
       }
@@ -126,8 +136,39 @@ export function createMemoryClient() {
       return {}
     }
 
+    if (name === 'HeadBucketCommand') {
+      return {}
+    }
+
+    if (name === 'GetBucketLifecycleConfigurationCommand') {
+      if (lifecycle === undefined) {
+        throw Object.assign(new Error('The lifecycle configuration does not exist.'), {
+          name: 'NoSuchLifecycleConfiguration',
+          $metadata: { httpStatusCode: 404 },
+        })
+      }
+
+      return { Rules: lifecycle }
+    }
+
     throw new Error(`Unexpected command: ${name}`)
   })
 
-  return { client: { send, destroy: vi.fn() } as unknown as S3Client, objects, send }
+  return {
+    client: {
+      send,
+      destroy: vi.fn(),
+      // Shaped like the real client's, so `doctor` can be exercised against it.
+      config: {
+        region: 'eu-west-3',
+        credentials: async () => ({ accessKeyId: 'AKIAEXAMPLE1234', secretAccessKey: 'secret' }),
+      },
+    } as unknown as S3Client,
+    objects,
+    send,
+    /** Installs the lifecycle rules `GetBucketLifecycleConfiguration` reports. */
+    setLifecycle(rules: Record<string, any>[] | undefined) {
+      lifecycle = rules
+    },
+  }
 }

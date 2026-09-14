@@ -1,7 +1,7 @@
 import { customAlphabet } from 'nanoid'
 
 import { BucketCodeError } from './errors.js'
-import type { SyncCodeOptions, SyncCodes } from './types.js'
+import type { SyncCodeOptions, SyncCodes } from './types-codes.js'
 
 /**
  * Ready-made alphabets. Pass your own if none of these fit — the only rule is
