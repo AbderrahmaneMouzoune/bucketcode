@@ -22,8 +22,9 @@ jobs:
       pull-requests: write
     outputs:
       released: ${{ steps.release.outputs.releases_created }}
-      tag: ${{ steps.release.outputs['packages/bucketcode--tag_name'] }}
-      version: ${{ steps.release.outputs['packages/bucketcode--version'] }}
+      # Which package directories this release covers, as a JSON array. Only
+      # those get published; the rest are untouched.
+      paths: ${{ steps.release.outputs.paths_released }}
 
     steps:
       # Keeps a release pull request open with the next version and the changelog
@@ -72,14 +73,35 @@ jobs:
 
       - run: bun run type-check
 
-      - run: bunx turbo test --filter=bucketcode
+      - run: bunx turbo test
 
       - run: bun run build
 
       # Drop NODE_AUTH_TOKEN and configure this repository as a trusted
       # publisher on npm to publish through OIDC instead of a token.
       - name: Publish
-        working-directory: packages/bucketcode
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
+          RELEASED_PATHS: ${{ needs.release-please.outputs.paths }}
+        run: |
+          set -euo pipefail
+
+          # Dependencies before dependents, so a package is never on the
+          # registry before something it needs.
+          ORDER='packages/protocol packages/bucketcode packages/react packages/cli'
+
+          if [ -n "${RELEASED_PATHS:-}" ] && [ "$RELEASED_PATHS" != '[]' ]; then
+            selected=$(printf '%s' "$RELEASED_PATHS" | jq -r '.[]')
+          else
+            # Reached through the manual "Publish" input, which republishes
+            # whatever versions are currently on main.
+            selected=$(printf '%s\n' $ORDER)
+          fi
+
+          for path in $ORDER; do
+            if printf '%s\n' "$selected" | grep -qx "$path"; then
+              echo "::group::Publishing $path"
+              (cd "$path" && npm publish --provenance --access public)
+              echo '::endgroup::'
+            fi
+          done

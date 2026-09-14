@@ -1,28 +1,87 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "bootstrap-sha": "32bd96e58d26ee50d570bfbc3c183f40d6d60716",
-  "include-component-in-tag": false,
+  "include-component-in-tag": true,
   "bump-minor-pre-major": true,
   "pull-request-title-pattern": "chore: release ${version}",
-  "pull-request-header": "The next release of `bucketcode`, prepared by release-please. Merging it bumps the version, writes the changelog, tags the commit and publishes to npm.",
+  "pull-request-header": "The next release of the bucketcode packages, prepared by release-please. Merging it bumps the versions, writes the changelogs, tags the commits and publishes to npm.",
   "changelog-sections": [
-    { "type": "feat", "section": "Features" },
-    { "type": "fix", "section": "Bug Fixes" },
-    { "type": "perf", "section": "Performance Improvements" },
-    { "type": "deps", "section": "Dependencies" },
-    { "type": "revert", "section": "Reverts" },
-    { "type": "docs", "section": "Documentation" },
-    { "type": "refactor", "section": "Code Refactoring", "hidden": true },
-    { "type": "test", "section": "Tests", "hidden": true },
-    { "type": "build", "section": "Build System", "hidden": true },
-    { "type": "ci", "section": "Continuous Integration", "hidden": true },
-    { "type": "style", "section": "Styles", "hidden": true },
-    { "type": "chore", "section": "Miscellaneous Chores", "hidden": true }
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Bug Fixes"
+    },
+    {
+      "type": "perf",
+      "section": "Performance Improvements"
+    },
+    {
+      "type": "deps",
+      "section": "Dependencies"
+    },
+    {
+      "type": "revert",
+      "section": "Reverts"
+    },
+    {
+      "type": "docs",
+      "section": "Documentation"
+    },
+    {
+      "type": "refactor",
+      "section": "Code Refactoring",
+      "hidden": true
+    },
+    {
+      "type": "test",
+      "section": "Tests",
+      "hidden": true
+    },
+    {
+      "type": "build",
+      "section": "Build System",
+      "hidden": true
+    },
+    {
+      "type": "ci",
+      "section": "Continuous Integration",
+      "hidden": true
+    },
+    {
+      "type": "style",
+      "section": "Styles",
+      "hidden": true
+    },
+    {
+      "type": "chore",
+      "section": "Miscellaneous Chores",
+      "hidden": true
+    }
   ],
   "packages": {
+    "packages/protocol": {
+      "release-type": "node",
+      "package-name": "@bucketcode/protocol",
+      "component": "protocol"
+    },
     "packages/bucketcode": {
       "release-type": "node",
-      "package-name": "bucketcode"
+      "package-name": "bucketcode",
+      "component": "bucketcode"
+    },
+    "packages/react": {
+      "release-type": "node",
+      "package-name": "@bucketcode/react",
+      "component": "react"
+    },
+    "packages/cli": {
+      "release-type": "node",
+      "package-name": "@bucketcode/cli",
+      "component": "cli"
     }
-  }
+  },
+  "plugins": ["node-workspace"]
 }
