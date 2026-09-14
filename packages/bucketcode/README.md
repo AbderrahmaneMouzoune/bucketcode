@@ -68,43 +68,88 @@ That envelope is what makes a restore safe rather than hopeful. `getSnapshot()` 
 Compression is on by default and is not a detail: an IndexedDB dump is repetitive JSON, so gzip
 routinely cuts it by 5–10×. That is headroom against the request limit of whatever runs your API.
 
-## The two routes
+## The routes, without writing them
+
+`createTransferHandler()` serves [the transfer protocol](https://github.com/AbderrahmaneMouzoune/bucketcode/blob/main/apps/docs/content/docs/protocol.mdx):
+create a transfer, read it back, burn it. It takes a `Request` and returns a `Response`, so it is a
+Next route handler, a Hono route, `Bun.serve` or a worker without an adapter for any of them.
 
 ```ts
-// POST /api/sync — the device that has the data
-export async function POST(request: Request) {
-  const state = await request.json()
-  const code = store.codes.create()
+// app/api/transfers/[[...route]]/route.ts
+import { createBucket, createTransferHandler } from 'bucketcode'
 
-  await store.putSnapshot(code, state, {
-    app: 'notes',
-    version: SCHEMA_VERSION,
-    device: request.headers.get('user-agent') ?? undefined,
-    expiresIn: 60 * 60, // a transfer code should not outlive the transfer
-    ifAbsent: true, // never land on a code someone else already claimed
-  })
-
-  return Response.json({ code })
-}
+export const { GET, POST, DELETE } = createTransferHandler({
+  bucket: createBucket({ bucket: 'my-bucket' }),
+  app: 'notes',
+  expiresIn: 3600,
+})
 ```
+
+Every route is public unless you pass `authorize` — fine for a personal drop box behind a proxy,
+not fine for anything else:
 
 ```ts
-// GET /api/sync/[code] — the device that wants it
-export async function GET(_request: Request, { params }: { params: Promise<{ code: string }> }) {
-  const { code } = await params
-
-  const snapshot = await store.getSnapshot(store.codes.normalize(code), { maxVersion: SCHEMA_VERSION })
-
-  if (!snapshot) return Response.json({ error: 'Unknown or expired code' }, { status: 404 })
-
-  return Response.json({ data: snapshot.data, createdAt: snapshot.createdAt, device: snapshot.device })
-}
+createTransferHandler({
+  bucket,
+  authorize: (request) => request.headers.get('authorization') === `Bearer ${process.env.TOKEN}`,
+})
 ```
 
-The client half — reading IndexedDB out and writing it back in — is your application's code,
-because only it knows its own object stores. The
-[example](https://github.com/AbderrahmaneMouzoune/bucketcode/tree/main/examples/indexeddb-sync)
-shows a complete one.
+The browser half is `bucketcode/protocol`, which is `fetch` and nothing else — no path from it
+reaches the AWS SDK, so it bundles for a browser or React Native without dragging a storage client
+along:
+
+```ts
+import { createTransferClient } from 'bucketcode/protocol'
+
+const transfers = createTransferClient({ baseUrl: '/api/transfers' })
+
+const { code } = await transfers.createSnapshot({ data: state, version: 3 })
+const incoming = await transfers.read(typed) // null when unknown or expired
+```
+
+Writing the routes by hand stays perfectly reasonable when you want different shapes or different
+semantics — the handler is built on the same public methods you would call yourself, and
+`store.codes`, `putSnapshot()` and `getSnapshot()` are unchanged.
+
+## The CLI
+
+The package ships a binary, so anywhere bucketcode is installed:
+
+```sh
+npx bucketcode doctor
+```
+
+`doctor` performs the operations bucketcode needs and reports what happened, rather than reading
+your bucket policy and reasoning about it:
+
+```
+✓ Configuration: bucket "transfers", region "eu-west-3"
+✓ Credentials: resolved, key ends in 1234
+✓ Bucket reachable: HeadBucket succeeded
+✓ Write, read, delete: round-tripped a probe object
+! Expiry cleanup: no enabled expiration rule
+  → Add an S3 lifecycle rule that expires objects under this bucket after a day or two.
+```
+
+That last check is the one that earns the command: `expiresIn` stops a transfer being _handed
+over_, but only a lifecycle rule deletes the object, and nothing surfaces the gap until a bill
+does.
+
+`put`, `get` and `rm` move files. The code goes to stdout and everything else to stderr, so it
+composes:
+
+```sh
+CODE=$(bucketcode put ./report.pdf)
+bucketcode get "$CODE" -o ./report.pdf   # on the other machine
+```
+
+Every command takes `--remote`, pointing it at your own deployment of the protocol instead of at
+S3 — so the machine you run it from needs a token rather than credentials:
+
+```sh
+bucketcode --remote https://drop.example.com/api/transfers put ./report.pdf
+```
 
 ## Sync codes
 
@@ -141,6 +186,14 @@ store.codes.normalize('OIL5ABCD') // → "0115ABCD"
 `createSyncCodes()`, `createSyncCode()` and `normalizeSyncCode()` are exported for use outside a
 store; prefer `store.codes` in application code, since configuring the shape in one place is what
 keeps the two sides in agreement.
+
+They are also available on their own from `bucketcode/codes`, which has no path to the AWS SDK —
+so the input that repairs a code as the user types it can run in the browser, before any network
+call:
+
+```ts
+import { normalizeSyncCode } from 'bucketcode/codes'
+```
 
 **A sync code is a bearer token.** Anyone who has it can read that snapshot. Give it a short
 `expiresIn` and rate-limit the lookup route — the shorter the code, the more that rate limit is
