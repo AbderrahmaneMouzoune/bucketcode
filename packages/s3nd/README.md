@@ -1,9 +1,9 @@
-# bucketcode
+# s3nd
 
 Move a local-first app's data from one device to another, through your own bucket.
 
 ```ts
-import { createBucket } from 'bucketcode'
+import { createBucket } from 's3nd'
 
 const store = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
 
@@ -17,7 +17,7 @@ snapshot?.data // → the state, ready to write back into IndexedDB
 ```
 
 Your app keeps everything in IndexedDB: fast, offline, private. Then the user opens it on their
-phone and it is empty, because IndexedDB does not leave the browser it was written in. bucketcode
+phone and it is empty, because IndexedDB does not leave the browser it was written in. s3nd
 is the small server-side piece that closes that gap — it snapshots the local state into a bucket
 you control, under a code the user carries across.
 
@@ -33,7 +33,7 @@ lives in the same repository.
 ## Install
 
 ```sh
-npm install bucketcode
+npm install s3nd
 ```
 
 Node 20 or later — that is what AWS SDK v3 requires. `@aws-sdk/client-s3` and
@@ -46,7 +46,7 @@ and no peer dependency to satisfy.
 
 ```jsonc
 {
-  "bucketcode": 1, // envelope format, not your data's
+  "s3nd": 1, // envelope format, not your data's
   "app": "notes",
   "version": 3, // your schema version
   "device": "Pixel 8",
@@ -76,7 +76,7 @@ Next route handler, a Hono route, `Bun.serve` or a worker without an adapter for
 
 ```ts
 // app/api/transfers/[[...route]]/route.ts
-import { createBucket, createTransferHandler } from 'bucketcode'
+import { createBucket, createTransferHandler } from 's3nd'
 
 export const { GET, POST, DELETE } = createTransferHandler({
   bucket: createBucket({ bucket: 'my-bucket' }),
@@ -95,12 +95,12 @@ createTransferHandler({
 })
 ```
 
-The browser half is a separate package, `@bucketcode/protocol`, whose whole dependency tree is
+The browser half is a separate package, `@s3nd/protocol`, whose whole dependency tree is
 nanoid — no path from it reaches the AWS SDK, so it bundles for a browser or React Native without
 dragging a storage client along:
 
 ```ts
-import { createTransferClient } from '@bucketcode/protocol'
+import { createTransferClient } from '@s3nd/protocol'
 
 const transfers = createTransferClient({ baseUrl: '/api/transfers' })
 
@@ -108,7 +108,7 @@ const { code } = await transfers.createSnapshot({ data: state, version: 3 })
 const incoming = await transfers.read(typed) // null when unknown or expired
 ```
 
-In React, [`@bucketcode/react`](https://www.npmjs.com/package/@bucketcode/react) wraps that in
+In React, [`@s3nd/react`](https://www.npmjs.com/package/@s3nd/react) wraps that in
 hooks: `useSendTransfer`, `useReceiveTransfer`, and an input that repairs the code as the user
 types it.
 
@@ -118,14 +118,14 @@ semantics — the handler is built on the same public methods you would call you
 
 ## The CLI
 
-[`@bucketcode/cli`](https://www.npmjs.com/package/@bucketcode/cli) is a separate package built on
+[`@s3nd/cli`](https://www.npmjs.com/package/@s3nd/cli) is a separate package built on
 this one, so nothing a command line needs ships to your server:
 
 ```sh
-npx @bucketcode/cli doctor
+npx @s3nd/cli doctor
 ```
 
-`doctor` performs the operations bucketcode needs and reports what happened — including whether a
+`doctor` performs the operations s3nd needs and reports what happened — including whether a
 lifecycle rule will actually delete your expired transfers, which is the one thing nobody discovers
 until a bill arrives. `put`, `get` and `rm` move files between machines with a code.
 
@@ -140,7 +140,7 @@ The default is eight characters of
 survives being read aloud, written on paper, or typed on a phone. Both halves are configurable:
 
 ```ts
-import { createBucket, syncCodeAlphabets } from 'bucketcode'
+import { createBucket, syncCodeAlphabets } from 's3nd'
 
 const store = createBucket({
   bucket: 'my-bucket',
@@ -165,12 +165,12 @@ store.codes.normalize('OIL5ABCD') // → "0115ABCD"
 store; prefer `store.codes` in application code, since configuring the shape in one place is what
 keeps the two sides in agreement.
 
-They are re-exported here from `@bucketcode/protocol`, which owns them — a sync code _is_ part of
+They are re-exported here from `@s3nd/protocol`, which owns them — a sync code _is_ part of
 the contract between the two devices. Import them from there when you need them in a browser, so
 the repair can happen as the user types, before any network call:
 
 ```ts
-import { normalizeSyncCode } from '@bucketcode/protocol'
+import { normalizeSyncCode } from '@s3nd/protocol'
 ```
 
 **A sync code is a bearer token.** Anyone who has it can read that snapshot. Give it a short
@@ -193,7 +193,7 @@ const current = await store.getSnapshot(`user-${userId}`)
 try {
   await store.putSnapshot(`user-${userId}`, merged, { ifMatch: current?.etag })
 } catch (error) {
-  if (isBucketCodeError(error) && error.code === 'PRECONDITION_FAILED') {
+  if (isS3ndError(error) && error.code === 'PRECONDITION_FAILED') {
     // Another device won. Read again, merge again.
   }
 
@@ -225,7 +225,7 @@ Anything the package does not wrap is one command away through `store.client`, w
 
 ## Errors
 
-Everything throws a `BucketCodeError` carrying a stable `code`, with the original error in `cause`:
+Everything throws a `S3ndError` carrying a stable `code`, with the original error in `cause`:
 
 | Code                                                            | When                                                                                                    |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -258,10 +258,10 @@ directly. Both get first-class support in v0.2, along with multipart.
 
 ```ts
 createBucket({
-  bucket: 'my-bucket', // required (or BUCKETCODE_BUCKET / S3_BUCKET)
-  region: 'eu-west-3', // or BUCKETCODE_REGION / AWS_REGION / AWS_DEFAULT_REGION
+  bucket: 'my-bucket', // required (or S3ND_BUCKET / S3_BUCKET)
+  region: 'eu-west-3', // or S3ND_REGION / AWS_REGION / AWS_DEFAULT_REGION
   credentials: { accessKeyId: '…', secretAccessKey: '…' }, // omit for the AWS provider chain
-  endpoint: 'https://…', // S3-compatible storage — or BUCKETCODE_ENDPOINT / S3_ENDPOINT
+  endpoint: 'https://…', // S3-compatible storage — or S3ND_ENDPOINT / S3_ENDPOINT
   prefix: 'snapshots', // internal namespace, applied on the way in and out
   maxSize: 5 * 1024 * 1024, // reject bigger writes before any network call
 })

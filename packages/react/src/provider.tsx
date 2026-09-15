@@ -1,11 +1,11 @@
 'use client'
 
-import { createTransferClient, type TransferClient } from '@bucketcode/protocol'
+import { createTransferClient, type TransferClient } from '@s3nd/protocol'
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
 
 const TransferClientContext = createContext<TransferClient | null>(null)
 
-export interface BucketcodeProviderProps {
+export interface S3ndProviderProps {
   children: ReactNode
   /**
    * Where your transfer routes are mounted, e.g. `/api/transfers`. Ignored when
@@ -24,7 +24,7 @@ export interface BucketcodeProviderProps {
  * Nothing under here ever sees a storage credential: the browser talks to your
  * routes, and your routes talk to the bucket.
  */
-export function BucketcodeProvider({ children, baseUrl, headers, client }: BucketcodeProviderProps) {
+export function S3ndProvider({ children, baseUrl, headers, client }: S3ndProviderProps) {
   // `headers` is almost always an object literal, so a new reference on every
   // render. Keying the memo on its content stops that rebuilding the client.
   const headerKey = headers ? JSON.stringify(headers) : ''
@@ -33,7 +33,7 @@ export function BucketcodeProvider({ children, baseUrl, headers, client }: Bucke
     if (client) return client
 
     if (!baseUrl) {
-      throw new Error('BucketcodeProvider needs either a `baseUrl` or a `client`.')
+      throw new Error('S3ndProvider needs either a `baseUrl` or a `client`.')
     }
 
     // Reading headers back out of the key, rather than closing over the prop,
@@ -52,7 +52,7 @@ export function useTransferClient(): TransferClient {
   const client = useContext(TransferClientContext)
 
   if (!client) {
-    throw new Error('No bucketcode client in context. Wrap this tree in <BucketcodeProvider baseUrl="/api/transfers">.')
+    throw new Error('No s3nd client in context. Wrap this tree in <S3ndProvider baseUrl="/api/transfers">.')
   }
 
   return client

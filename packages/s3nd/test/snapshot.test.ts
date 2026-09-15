@@ -3,7 +3,7 @@ import { gunzipSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBucket } from '../src/bucket.js'
-import type { BucketCodeError } from '@bucketcode/protocol'
+import type { S3ndError } from '@s3nd/protocol'
 import { clearBucketEnv, createMemoryClient, createStubClient } from './helpers.js'
 
 beforeEach(clearBucketEnv)
@@ -35,7 +35,7 @@ describe('putSnapshot', () => {
 
     const envelope = JSON.parse(gunzipSync(input.Body).toString('utf8'))
     expect(envelope).toMatchObject({
-      bucketcode: 1,
+      s3nd: 1,
       app: 'notes',
       version: 3,
       device: 'Pixel 8',
@@ -131,6 +131,46 @@ describe('getSnapshot', () => {
     expect((await bucket.getSnapshot('XK5892'))?.data).toEqual(STATE)
   })
 
+  it('still reads a snapshot written before the package was renamed', async () => {
+    const { client, objects } = createMemoryClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    // Exactly what bucketcode@0.1.0 wrote: the marker under its old name.
+    const legacy = {
+      bucketcode: 1,
+      app: 'notes',
+      version: 3,
+      device: 'Pixel 8',
+      createdAt: '2026-08-27T12:00:00.000Z',
+      data: STATE,
+    }
+    objects.set('XK5892', {
+      body: Buffer.from(JSON.stringify(legacy)),
+      contentType: 'application/json',
+      etag: 'legacy',
+      lastModified: new Date(),
+    })
+
+    const read = await bucket.getSnapshot<typeof STATE>('XK5892')
+
+    expect(read?.data).toEqual(STATE)
+    expect(read).toMatchObject({ app: 'notes', version: 3, device: 'Pixel 8' })
+  })
+
+  it('rejects an object carrying no marker at all', async () => {
+    const { client, objects } = createMemoryClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    objects.set('XK5892', {
+      body: Buffer.from(JSON.stringify({ hello: 'world' })),
+      contentType: 'application/json',
+      etag: 'plain',
+      lastModified: new Date(),
+    })
+
+    await expect(bucket.getSnapshot('XK5892')).rejects.toMatchObject({ code: 'INVALID_SNAPSHOT' })
+  })
+
   it('returns null when there is nothing stored', async () => {
     const { client } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', client })
@@ -172,7 +212,7 @@ describe('getSnapshot', () => {
 
     await bucket.upload('just a text file', { key: 'XK5892' })
 
-    const error = (await bucket.getSnapshot('XK5892').catch((e) => e)) as BucketCodeError
+    const error = (await bucket.getSnapshot('XK5892').catch((e) => e)) as S3ndError
     expect(error.code).toBe('INVALID_SNAPSHOT')
   })
 
@@ -180,7 +220,7 @@ describe('getSnapshot', () => {
     const { client } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
-    await bucket.upload(JSON.stringify({ bucketcode: 99, createdAt: new Date().toISOString(), data: {} }), {
+    await bucket.upload(JSON.stringify({ s3nd: 99, createdAt: new Date().toISOString(), data: {} }), {
       key: 'XK5892',
     })
 
@@ -200,7 +240,7 @@ describe('concurrent devices', () => {
 
     const error = (await bucket
       .putSnapshot('XK5892', { notes: ['a', 'c'] }, { ifMatch: first.etag })
-      .catch((e) => e)) as BucketCodeError
+      .catch((e) => e)) as S3ndError
 
     expect(error.code).toBe('PRECONDITION_FAILED')
     expect(await bucket.getSnapshot('XK5892')).toMatchObject({ data: { notes: ['a', 'b'] } })

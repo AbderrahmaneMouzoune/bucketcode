@@ -10,11 +10,11 @@ import type { Readable } from 'node:stream'
 
 import { normalizeBody } from './body.js'
 import { createS3Client, resolveConfig } from './config.js'
-import { BucketCodeError } from '@bucketcode/protocol'
+import { S3ndError } from '@s3nd/protocol'
 import { assertValidKey, encodeKey, generateKey, joinKey, normalizePrefix, sanitizeFilename } from './key.js'
 import { DEFAULT_CONTENT_TYPE, lookupContentType } from './mime.js'
 import { decodeSnapshot, encodeSnapshot, ENVELOPE_VERSION } from './snapshot.js'
-import { createSyncCodes } from '@bucketcode/protocol'
+import { createSyncCodes } from '@s3nd/protocol'
 import type {
   BucketConfig,
   GetOptions,
@@ -153,7 +153,7 @@ export class Bucket {
     const filename = options.filename ?? normalized.filename
 
     if (this.config.maxSize != null && size != null && size > this.config.maxSize) {
-      throw new BucketCodeError(
+      throw new S3ndError(
         'FILE_TOO_LARGE',
         `Upload is ${size} bytes, which exceeds the configured maxSize of ${this.config.maxSize} bytes.`,
       )
@@ -204,7 +204,7 @@ export class Bucket {
       }
     } catch (error) {
       if ((options.ifMatch != null || options.ifAbsent) && isPreconditionFailure(error)) {
-        throw new BucketCodeError(
+        throw new S3ndError(
           'PRECONDITION_FAILED',
           options.ifAbsent
             ? `"${path}" already exists in bucket "${this.bucket}".`
@@ -213,7 +213,7 @@ export class Bucket {
         )
       }
 
-      throw new BucketCodeError(
+      throw new S3ndError(
         'UPLOAD_FAILED',
         `Failed to upload "${path}" to bucket "${this.bucket}": ${describe(error)}`,
         { cause: error },
@@ -242,13 +242,13 @@ export class Bucket {
     const expiresAt = options.expiresIn != null ? new Date(createdAt.getTime() + options.expiresIn * 1000) : undefined
 
     if (options.expiresIn != null && (!Number.isFinite(options.expiresIn) || options.expiresIn <= 0)) {
-      throw new BucketCodeError('INVALID_SNAPSHOT', '`expiresIn` must be a positive number of seconds.')
+      throw new S3ndError('INVALID_SNAPSHOT', '`expiresIn` must be a positive number of seconds.')
     }
 
     const compress = options.compress ?? true
 
     const envelope: SnapshotEnvelope = {
-      bucketcode: ENVELOPE_VERSION,
+      s3nd: ENVELOPE_VERSION,
       app: options.app,
       version: options.version,
       device: options.device,
@@ -296,7 +296,7 @@ export class Bucket {
     }
 
     if (options.maxVersion != null && envelope.version != null && envelope.version > options.maxVersion) {
-      throw new BucketCodeError(
+      throw new S3ndError(
         'SNAPSHOT_TOO_NEW',
         `Snapshot is at schema version ${envelope.version}, but this device only understands ${options.maxVersion}. Update the application before restoring.`,
       )
@@ -336,17 +336,15 @@ export class Bucket {
     } catch (error) {
       if (isNotFound(error)) return null
 
-      throw new BucketCodeError(
-        'GET_FAILED',
-        `Failed to read "${path}" from bucket "${this.bucket}": ${describe(error)}`,
-        { cause: error },
-      )
+      throw new S3ndError('GET_FAILED', `Failed to read "${path}" from bucket "${this.bucket}": ${describe(error)}`, {
+        cause: error,
+      })
     }
 
     const body = response.Body as SdkStream | undefined
 
     if (!body) {
-      throw new BucketCodeError('GET_FAILED', `S3 returned no body for "${path}" in bucket "${this.bucket}".`)
+      throw new S3ndError('GET_FAILED', `S3 returned no body for "${path}" in bucket "${this.bucket}".`)
     }
 
     const metadata = response.Metadata ?? {}
@@ -378,7 +376,7 @@ export class Bucket {
     if (!wantsSigned) {
       const url = this.publicUrlFor(path)
       if (!url) {
-        throw new BucketCodeError(
+        throw new S3ndError(
           'URL_FAILED',
           'A public URL was requested but no `publicUrl` is configured. Set it on createBucket(), or drop `signed: false`.',
         )
@@ -390,7 +388,7 @@ export class Bucket {
     const expiresIn = options.expiresIn ?? DEFAULT_EXPIRES_IN
 
     if (!Number.isFinite(expiresIn) || expiresIn <= 0 || expiresIn > MAX_EXPIRES_IN) {
-      throw new BucketCodeError('URL_FAILED', `\`expiresIn\` must be between 1 and ${MAX_EXPIRES_IN} seconds.`)
+      throw new S3ndError('URL_FAILED', `\`expiresIn\` must be between 1 and ${MAX_EXPIRES_IN} seconds.`)
     }
 
     const command = new GetObjectCommand({
@@ -402,7 +400,7 @@ export class Bucket {
     try {
       return await getSignedUrl(this.client, command, { expiresIn })
     } catch (error) {
-      throw new BucketCodeError('URL_FAILED', `Failed to sign a URL for "${path}": ${describe(error)}`, {
+      throw new S3ndError('URL_FAILED', `Failed to sign a URL for "${path}": ${describe(error)}`, {
         cause: error,
       })
     }
@@ -425,7 +423,7 @@ export class Bucket {
         await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: only }))
         return
       } catch (error) {
-        throw new BucketCodeError(
+        throw new S3ndError(
           'DELETE_FAILED',
           `Failed to delete "${only}" from bucket "${this.bucket}": ${describe(error)}`,
           { cause: error },
@@ -446,7 +444,7 @@ export class Bucket {
 
         failures = (response.Errors ?? []).map((entry) => `${entry.Key ?? '?'} (${entry.Code ?? 'unknown'})`)
       } catch (error) {
-        throw new BucketCodeError(
+        throw new S3ndError(
           'DELETE_FAILED',
           `Failed to delete ${batch.length} objects from bucket "${this.bucket}": ${describe(error)}`,
           { cause: error },
@@ -454,7 +452,7 @@ export class Bucket {
       }
 
       if (failures.length > 0) {
-        throw new BucketCodeError(
+        throw new S3ndError(
           'DELETE_FAILED',
           `Failed to delete ${failures.length} object(s) from bucket "${this.bucket}": ${failures.join(', ')}.`,
         )
@@ -463,7 +461,7 @@ export class Bucket {
   }
 
   /**
-   * Releases the HTTP sockets of the client bucketcode created. A client you
+   * Releases the HTTP sockets of the client s3nd created. A client you
    * passed in yourself is left alone — it is yours to close.
    */
   destroy(): void {

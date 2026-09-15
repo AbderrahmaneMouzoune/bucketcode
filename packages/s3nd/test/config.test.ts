@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { resolveConfig } from '../src/config.js'
-import type { BucketCodeError } from '@bucketcode/protocol'
+import type { S3ndError } from '@s3nd/protocol'
 import { clearBucketEnv } from './helpers.js'
 
 beforeEach(clearBucketEnv)
@@ -13,12 +13,12 @@ describe('resolveConfig', () => {
       try {
         resolveConfig()
       } catch (e) {
-        return e as BucketCodeError
+        return e as S3ndError
       }
     })()
 
     expect(error?.code).toBe('INVALID_CONFIG')
-    expect(error?.message).toMatch(/BUCKETCODE_BUCKET/)
+    expect(error?.message).toMatch(/S3ND_BUCKET/)
   })
 
   it('falls back to environment variables', () => {

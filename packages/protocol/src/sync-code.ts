@@ -1,6 +1,6 @@
 import { customAlphabet } from 'nanoid'
 
-import { BucketCodeError } from './bucket-code-error.js'
+import { S3ndError } from './s3nd-error.js'
 import type { SyncCodeOptions, SyncCodes } from './types-codes.js'
 
 /**
@@ -28,12 +28,12 @@ const SEPARATORS = /[\s\-_]+/g
 
 function assertValidAlphabet(alphabet: string): void {
   if (typeof alphabet !== 'string' || alphabet.length < 2) {
-    throw new BucketCodeError('INVALID_CONFIG', 'A sync code alphabet needs at least two characters.')
+    throw new S3ndError('INVALID_CONFIG', 'A sync code alphabet needs at least two characters.')
   }
 
   if (SEPARATORS.test(alphabet)) {
     SEPARATORS.lastIndex = 0
-    throw new BucketCodeError(
+    throw new S3ndError(
       'INVALID_CONFIG',
       'A sync code alphabet must not contain spaces, dashes or underscores: those are stripped when a code is read back.',
     )
@@ -42,13 +42,13 @@ function assertValidAlphabet(alphabet: string): void {
   SEPARATORS.lastIndex = 0
 
   if (new Set(alphabet).size !== alphabet.length) {
-    throw new BucketCodeError('INVALID_CONFIG', 'A sync code alphabet must not repeat a character.')
+    throw new S3ndError('INVALID_CONFIG', 'A sync code alphabet must not repeat a character.')
   }
 }
 
 function assertValidLength(length: number): void {
   if (!Number.isInteger(length) || length < 1 || length > MAX_LENGTH) {
-    throw new BucketCodeError('INVALID_CONFIG', `A sync code length must be an integer between 1 and ${MAX_LENGTH}.`)
+    throw new S3ndError('INVALID_CONFIG', `A sync code length must be an integer between 1 and ${MAX_LENGTH}.`)
   }
 }
 
@@ -96,7 +96,7 @@ export function createSyncCodes(options: SyncCodeOptions = {}): SyncCodes {
 
     normalize(input: string): string {
       if (typeof input !== 'string') {
-        throw new BucketCodeError('INVALID_SYNC_CODE', 'A sync code must be a string.')
+        throw new S3ndError('INVALID_SYNC_CODE', 'A sync code must be a string.')
       }
 
       let normalized = input.trim().replace(SEPARATORS, '')
@@ -105,12 +105,12 @@ export function createSyncCodes(options: SyncCodeOptions = {}): SyncCodes {
       normalized = [...normalized].map((character) => folds.get(character) ?? character).join('')
 
       if (normalized.length === 0) {
-        throw new BucketCodeError('INVALID_SYNC_CODE', 'A sync code must not be empty.')
+        throw new S3ndError('INVALID_SYNC_CODE', 'A sync code must not be empty.')
       }
 
       for (const character of normalized) {
         if (!alphabet.includes(character)) {
-          throw new BucketCodeError(
+          throw new S3ndError(
             'INVALID_SYNC_CODE',
             `"${input}" is not a valid sync code: "${character}" is not one of ${alphabet}.`,
           )

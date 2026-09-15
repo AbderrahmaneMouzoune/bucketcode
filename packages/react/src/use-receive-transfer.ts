@@ -1,6 +1,6 @@
 'use client'
 
-import type { TransferMetadata } from '@bucketcode/protocol'
+import type { TransferMetadata } from '@s3nd/protocol'
 import { useCallback, useState } from 'react'
 
 import { useAsyncTask, type AsyncStatus } from './async-task.js'

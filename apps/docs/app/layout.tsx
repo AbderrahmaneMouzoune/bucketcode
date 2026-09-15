@@ -5,8 +5,8 @@ import './global.css'
 
 export const metadata: Metadata = {
   title: {
-    default: 'bucketcode',
-    template: '%s · bucketcode',
+    default: 's3nd',
+    template: '%s · s3nd',
   },
   description:
     "Move a local-first app's data from one device to another, through your own bucket. Snapshots, sync codes, and a small server-side API.",

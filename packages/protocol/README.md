@@ -1,25 +1,25 @@
-# @bucketcode/protocol
+# @s3nd/protocol
 
-The shared vocabulary of every bucketcode piece: the wire contract between a server and its
+The shared vocabulary of every s3nd piece: the wire contract between a server and its
 clients, a client that speaks it, and the sync codes that travel over it.
 
 ```sh
-npm install @bucketcode/protocol
+npm install @s3nd/protocol
 ```
 
 It holds one invariant — **nothing here imports a storage client**. That is what lets
-[`@bucketcode/react`](https://www.npmjs.com/package/@bucketcode/react), the CLI and a browser bundle
+[`@s3nd/react`](https://www.npmjs.com/package/@s3nd/react), the CLI and a browser bundle
 share this code without any of them pulling the AWS SDK behind it. Its only dependency is
 [nanoid](https://github.com/ai/nanoid).
 
-Most applications do not install this directly: `bucketcode` and `@bucketcode/react` depend on it
+Most applications do not install this directly: `s3nd` and `@s3nd/react` depend on it
 and re-export what you need. Reach for it when you are writing a client for a runtime neither of
 those covers, or implementing the protocol on a server that is not Node.
 
 ## The client
 
 ```ts
-import { createTransferClient } from '@bucketcode/protocol'
+import { createTransferClient } from '@s3nd/protocol'
 
 const transfers = createTransferClient({
   baseUrl: 'https://drop.example.com/api/transfers',
@@ -50,7 +50,7 @@ Every non-2xx answer carries `{ "error": { "code", "message" } }`, and the clien
 `TransferError` with that `code` on it. Branch on the code, never on the message:
 
 ```ts
-import { isTransferError } from '@bucketcode/protocol'
+import { isTransferError } from '@s3nd/protocol'
 
 if (isTransferError(error) && error.code === 'TOO_LARGE') {
   // ask the user to trim their database
@@ -65,12 +65,12 @@ describes each route and every error code in full.
 
 ## Sync codes
 
-A sync code belongs here rather than in `bucketcode` because it _is_ part of the contract: its
+A sync code belongs here rather than in `s3nd` because it _is_ part of the contract: its
 alphabet, and the rules for reading back what someone typed, are what the two devices have to agree
 on.
 
 ```ts
-import { createSyncCodes, syncCodeAlphabets } from '@bucketcode/protocol'
+import { createSyncCodes, syncCodeAlphabets } from '@s3nd/protocol'
 
 const codes = createSyncCodes()
 codes.create() // "K7QP2M4X"
@@ -85,7 +85,7 @@ The default is eight characters of [Crockford base32](https://www.crockford.com/
 alphabet.
 
 Normalizing in the browser, before any request, is what makes the input forgiving — see
-`useSyncCodeInput` in `@bucketcode/react`.
+`useSyncCodeInput` in `@s3nd/react`.
 
 ## License
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBucket } from '../src/bucket.js'
-import type { BucketCodeError } from '@bucketcode/protocol'
+import type { S3ndError } from '@s3nd/protocol'
 import { clearBucketEnv, createStubClient } from './helpers.js'
 
 beforeEach(clearBucketEnv)
@@ -62,7 +62,7 @@ describe('delete', () => {
     const { client } = createStubClient({ Errors: [{ Key: 'b.txt', Code: 'AccessDenied' }] })
     const bucket = createBucket({ bucket: 'assets', client })
 
-    const error = (await bucket.delete(['a.txt', 'b.txt']).catch((e) => e)) as BucketCodeError
+    const error = (await bucket.delete(['a.txt', 'b.txt']).catch((e) => e)) as S3ndError
 
     expect(error.code).toBe('DELETE_FAILED')
     expect(error.message).toContain('b.txt (AccessDenied)')
@@ -73,7 +73,7 @@ describe('delete', () => {
     const { client } = createStubClient({}, cause)
     const bucket = createBucket({ bucket: 'assets', client })
 
-    const error = (await bucket.delete('a.txt').catch((e) => e)) as BucketCodeError
+    const error = (await bucket.delete('a.txt').catch((e) => e)) as S3ndError
 
     expect(error.code).toBe('DELETE_FAILED')
     expect(error.cause).toBe(cause)

@@ -16,7 +16,7 @@ What actually lands in the bucket, before gzip:
 
 ```jsonc
 {
-  "bucketcode": 1, // envelope format — bucketcode's, not your data's
+  "s3nd": 1, // envelope format — s3nd's, not your data's
   "app": "notes",
   "version": 3, // your schema version
   "device": "Pixel 8",
@@ -26,7 +26,7 @@ What actually lands in the bucket, before gzip:
 }
 ```
 
-Every field but `bucketcode`, `createdAt` and `data` is optional, and every one of them earns its
+Every field but `s3nd`, `createdAt` and `data` is optional, and every one of them earns its
 place on the receiving side:
 
 - `app` catches the case where a code from one of your products is typed into another.
@@ -86,7 +86,7 @@ After that, `getSnapshot()` returns `null` — the same answer as a code that wa
 is exactly what you want to tell the user. An expired snapshot is **never** handed over, even
 while the object is still in the bucket.
 
-bucketcode does not delete it. Removing the object is a job for an S3 lifecycle rule on the
+s3nd does not delete it. Removing the object is a job for an S3 lifecycle rule on the
 prefix, which runs server-side, costs nothing, and keeps working when your application is not:
 
 ```jsonc
@@ -103,7 +103,7 @@ prefix, which runs server-side, costs nothing, and keeps working when your appli
 ```
 
 There is no default expiry. A transfer code should have a short one; a per-account backup should
-have none. Since bucketcode cannot tell which you are doing, it does not guess — passing
+have none. Since s3nd cannot tell which you are doing, it does not guess — passing
 `expiresIn` on a transfer is your job.
 
 ## Reading one back
@@ -131,4 +131,4 @@ parse it before you trust it.
 Restoring replaces the receiving device's state wholesale. There is no per-record merge, and
 nothing reconciles two divergent databases. For "move my data to my new phone" that is the correct
 and simplest model. For "two people edit the same list at the same time" it is not — reach for a
-CRDT, and use bucketcode to store its state if you like.
+CRDT, and use s3nd to store its state if you like.

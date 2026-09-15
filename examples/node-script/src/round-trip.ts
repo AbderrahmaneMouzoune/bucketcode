@@ -1,4 +1,4 @@
-import { createBucket, isBucketCodeError } from 'bucketcode'
+import { createBucket, isS3ndError } from 's3nd'
 
 /**
  * Exercises a transfer end to end against a real bucket: write a snapshot under
@@ -54,7 +54,7 @@ try {
     await store.putSnapshot(code, state, { ifAbsent: true })
     console.log('claim     UNEXPECTED: the second claim succeeded')
   } catch (error) {
-    console.log(`claim     rejected as ${isBucketCodeError(error) ? error.code : 'unknown'}`)
+    console.log(`claim     rejected as ${isS3ndError(error) ? error.code : 'unknown'}`)
   }
 
   // A write based on a stale read loses too.
@@ -63,13 +63,13 @@ try {
     await store.putSnapshot(code, { notes: [] }, { ifMatch: written.etag })
     console.log('ifMatch   UNEXPECTED: the stale write succeeded')
   } catch (error) {
-    console.log(`ifMatch   rejected as ${isBucketCodeError(error) ? error.code : 'unknown'}`)
+    console.log(`ifMatch   rejected as ${isS3ndError(error) ? error.code : 'unknown'}`)
   }
 
   await store.delete(code)
   console.log(`burned    ${(await store.getSnapshot(code)) === null ? 'gone' : 'still there'}`)
 } catch (error) {
-  if (isBucketCodeError(error)) {
+  if (isS3ndError(error)) {
     console.error(`${error.code}: ${error.message}`)
     process.exitCode = 1
   } else {

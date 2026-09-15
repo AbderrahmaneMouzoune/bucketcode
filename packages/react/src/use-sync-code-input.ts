@@ -1,6 +1,6 @@
 'use client'
 
-import { createSyncCodes, isBucketCodeError, type SyncCodeOptions } from '@bucketcode/protocol'
+import { createSyncCodes, isS3ndError, type SyncCodeOptions } from '@s3nd/protocol'
 import { useCallback, useMemo, useState, type ChangeEvent } from 'react'
 
 export interface SyncCodeInputProps {
@@ -51,7 +51,7 @@ export function useSyncCodeInput(options: SyncCodeOptions = {}): SyncCodeInput {
     try {
       return { code: codes.normalize(value), error: null }
     } catch (caught) {
-      if (isBucketCodeError(caught) && caught.code === 'INVALID_SYNC_CODE') {
+      if (isS3ndError(caught) && caught.code === 'INVALID_SYNC_CODE') {
         return { code: null, error: caught.message }
       }
 

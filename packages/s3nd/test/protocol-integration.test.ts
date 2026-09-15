@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createBucket } from '../src/bucket.js'
 import { createTransferHandler } from '../src/handler.js'
-import { createTransferClient, isTransferError } from '@bucketcode/protocol'
+import { createTransferClient, isTransferError } from '@s3nd/protocol'
 import { createMemoryClient } from './helpers.js'
 
 const BASE = 'http://drop.test/api/transfers'

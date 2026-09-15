@@ -2,9 +2,9 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
-import { TransferError, type CreatedTransfer, type TransferClient, type TransferMetadata } from '@bucketcode/protocol'
+import { TransferError, type CreatedTransfer, type TransferClient, type TransferMetadata } from '@s3nd/protocol'
 
-import { BucketcodeProvider, useReceiveTransfer, useSendTransfer, useTransferClient } from '../src/index.js'
+import { S3ndProvider, useReceiveTransfer, useSendTransfer, useTransferClient } from '../src/index.js'
 
 function created(code = 'K7QP2M4X', kind: 'snapshot' | 'file' = 'snapshot'): CreatedTransfer {
   return { code, kind, createdAt: '2026-01-01T00:00:00.000Z' }
@@ -26,7 +26,7 @@ function fakeClient(overrides: Partial<TransferClient> = {}): TransferClient {
 }
 
 function wrap(client: TransferClient) {
-  return ({ children }: { children: ReactNode }) => <BucketcodeProvider client={client}>{children}</BucketcodeProvider>
+  return ({ children }: { children: ReactNode }) => <S3ndProvider client={client}>{children}</S3ndProvider>
 }
 
 describe('useTransferClient', () => {
@@ -34,7 +34,7 @@ describe('useTransferClient', () => {
     // React logs the thrown error; the assertion is what matters.
     const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    expect(() => renderHook(() => useTransferClient())).toThrow(/BucketcodeProvider/)
+    expect(() => renderHook(() => useTransferClient())).toThrow(/S3ndProvider/)
 
     quiet.mockRestore()
   })

@@ -1,6 +1,6 @@
 'use client'
 
-import type { CreatedTransfer } from '@bucketcode/protocol'
+import type { CreatedTransfer } from '@s3nd/protocol'
 import { useCallback } from 'react'
 
 import { useAsyncTask, type AsyncStatus } from './async-task.js'

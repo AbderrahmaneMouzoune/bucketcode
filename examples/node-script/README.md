@@ -2,7 +2,7 @@
 
 A whole transfer in one file: write a snapshot under a code, read it back through a sloppily typed
 version of that code, prove the conditional writes work, then burn it. Useful as a smoke test when
-you point bucketcode at a new bucket or a new provider.
+you point s3nd at a new bucket or a new provider.
 
 ```sh
 cp .env.example .env

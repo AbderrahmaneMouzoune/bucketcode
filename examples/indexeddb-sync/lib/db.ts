@@ -2,11 +2,11 @@
  * A small IndexedDB store, plus the export/import pair a transfer needs.
  *
  * This half is deliberately application code: only your app knows its own
- * object stores, which is why bucketcode does not try to dump IndexedDB
+ * object stores, which is why s3nd does not try to dump IndexedDB
  * generically.
  */
 
-const DB_NAME = 'bucketcode-notes'
+const DB_NAME = 's3nd-notes'
 const DB_VERSION = 1
 const STORES = ['notes'] as const
 

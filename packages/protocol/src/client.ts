@@ -76,7 +76,7 @@ async function toTransferError(response: Response): Promise<TransferError> {
 }
 
 /**
- * A client for the bucketcode transfer protocol. Zero server dependencies: it
+ * A client for the s3nd transfer protocol. Zero server dependencies: it
  * is `fetch` and nothing else, so it bundles for a browser, a worker, the CLI
  * or React Native alike.
  */

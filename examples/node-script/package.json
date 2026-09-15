@@ -1,5 +1,5 @@
 {
-  "name": "@bucketcode/example-node-script",
+  "name": "@s3nd/example-node-script",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "bucketcode": "workspace:*",
+    "s3nd": "workspace:*",
     "nanoid": "^5.0.9"
   },
   "devDependencies": {

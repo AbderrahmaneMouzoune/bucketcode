@@ -3,21 +3,21 @@ export { createTransferHandler } from './handler.js'
 export type { TransferHandler, TransferHandlerConfig } from './handler.js'
 
 /**
- * Re-exported from `@bucketcode/protocol`, which owns them: they are shared
+ * Re-exported from `@s3nd/protocol`, which owns them: they are shared
  * with the React package and the CLI, and forwarding rather than redefining is
- * what keeps `instanceof BucketCodeError` true across package boundaries.
+ * what keeps `instanceof S3ndError` true across package boundaries.
  *
- * They were part of bucketcode@0.1.0's surface, so they stay on it.
+ * They were part of s3nd@0.1.0's surface, so they stay on it.
  */
 export {
-  BucketCodeError,
+  S3ndError,
   createSyncCode,
   createSyncCodes,
-  isBucketCodeError,
+  isS3ndError,
   normalizeSyncCode,
   syncCodeAlphabets,
-  type BucketCodeErrorCode,
-} from '@bucketcode/protocol'
+  type S3ndErrorCode,
+} from '@s3nd/protocol'
 
 export type {
   BucketConfig,

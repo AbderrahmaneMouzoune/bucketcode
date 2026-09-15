@@ -37,7 +37,7 @@ describe('createTransferClient', () => {
     await client.createFile({ body: new Uint8Array([1]), filename: 'rapport été.pdf' })
 
     const headers = calls[0]!.init.headers as Record<string, string>
-    expect(headers['x-bucketcode-filename']).toBe(encodeURIComponent('rapport été.pdf'))
+    expect(headers['x-s3nd-filename']).toBe(encodeURIComponent('rapport été.pdf'))
   })
 
   it('accepts a Uint8Array as a file body', async () => {

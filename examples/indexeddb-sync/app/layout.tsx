@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 export const metadata = {
-  title: 'bucketcode · IndexedDB sync example',
+  title: 's3nd · IndexedDB sync example',
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {

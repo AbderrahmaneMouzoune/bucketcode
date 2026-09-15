@@ -1,6 +1,6 @@
 ---
 title: 'The transfer protocol'
-description: 'Four HTTP routes between a bucketcode server and anything that talks to it — written down, so it is not just whatever the handler happens to do.'
+description: 'Four HTTP routes between a s3nd server and anything that talks to it — written down, so it is not just whatever the handler happens to do.'
 ---
 
 A browser cannot hold your S3 credentials, so a transfer always has a server in the middle. The
@@ -8,13 +8,13 @@ shape of that middle is this protocol: four routes, one error format.
 
 It is written down rather than left implicit for three reasons. A client works against any server
 that answers these routes, not only against `createTransferHandler()`. A server written in Go or
-Rails works with every bucketcode client. And the CLI pointed at `--remote` cannot tell which of
-those it is talking to — which is exactly why `bucketcode put` works against your own deployment.
+Rails works with every s3nd client. And the CLI pointed at `--remote` cannot tell which of
+those it is talking to — which is exactly why `s3nd put` works against your own deployment.
 
 ## Serving it
 
 ```ts title="app/api/transfers/[[...route]]/route.ts"
-import { createBucket, createTransferHandler } from 'bucketcode'
+import { createBucket, createTransferHandler } from 's3nd'
 
 export const { GET, POST, DELETE } = createTransferHandler({
   bucket: createBucket({ bucket: 'my-bucket' }),
@@ -43,7 +43,7 @@ Return `false` for a plain 401, or a `Response` to answer with your own.
 ## Talking to it
 
 ```ts
-import { createTransferClient } from '@bucketcode/protocol'
+import { createTransferClient } from '@s3nd/protocol'
 
 const transfers = createTransferClient({ baseUrl: 'https://drop.example.com/api/transfers' })
 
@@ -51,10 +51,10 @@ const { code } = await transfers.createSnapshot({ data: state, version: 3 })
 const incoming = await transfers.read(typedCode) // null when unknown or expired
 ```
 
-`@bucketcode/protocol` is `fetch` and nothing else. Its whole dependency tree is nanoid, and no
+`@s3nd/protocol` is `fetch` and nothing else. Its whole dependency tree is nanoid, and no
 path from it reaches the AWS SDK — so it bundles for a browser, a worker or React Native without
 dragging a storage client along. That is the reason it is a separate package rather than a subpath
-of `bucketcode`: a subpath would have put the SDK in every front-end's `node_modules`.
+of `s3nd`: a subpath would have put the SDK in every front-end's `node_modules`.
 
 In React you rarely call it directly — [the hooks](/docs/react) wrap it.
 
@@ -70,7 +70,7 @@ With `Content-Type: application/json`, the body is `{ data, version?, device? }`
 is a **snapshot** — structured state, handed back inline on read.
 
 With any other content type, the body is the raw bytes and the transfer is a **file**. The original
-filename travels percent-encoded in `X-Bucketcode-Filename`.
+filename travels percent-encoded in `X-S3nd-Filename`.
 
 ```json title="201"
 { "code": "K7QP2M4X", "kind": "snapshot", "createdAt": "…", "expiresAt": "…", "size": 412 }
@@ -138,7 +138,7 @@ Clients throw `TransferError`, which carries that `code` — branch on it rather
 or message text:
 
 ```ts
-import { isTransferError } from '@bucketcode/protocol'
+import { isTransferError } from '@s3nd/protocol'
 
 try {
   await transfers.createSnapshot({ data: state })
@@ -152,6 +152,6 @@ try {
 ## Expiry is enforced on read, not by deletion
 
 A transfer past its `expiresAt` is never handed over. The object itself, though, is still sitting
-in your bucket: removing it is an S3 lifecycle rule's job, and bucketcode does not create one for
-you. [`bucketcode doctor`](/docs/cli) checks whether you have one, because a bucket quietly filling
+in your bucket: removing it is an S3 lifecycle rule's job, and s3nd does not create one for
+you. [`s3nd doctor`](/docs/cli) checks whether you have one, because a bucket quietly filling
 up with expired transfers is the most common way this goes wrong.

@@ -32,7 +32,7 @@ console.log(result.size) // bytes actually stored
 
 ## Failing early
 
-Set `maxSize` below your platform's limit. bucketcode checks it before sending anything, so an
+Set `maxSize` below your platform's limit. s3nd checks it before sending anything, so an
 oversized snapshot costs a comparison instead of a truncated request:
 
 ```ts
@@ -46,7 +46,7 @@ const store = createBucket({
 try {
   await store.putSnapshot(code, state)
 } catch (error) {
-  if (isBucketCodeError(error) && error.code === 'FILE_TOO_LARGE') {
+  if (isS3ndError(error) && error.code === 'FILE_TOO_LARGE') {
     return Response.json({ error: 'This database is too large to transfer in one piece' }, { status: 413 })
   }
 
@@ -71,7 +71,7 @@ defeats gzip. Store blobs as objects and reference them by key — see
 [attachments beside the data](/docs/use-cases/attachments).
 
 **Presign the upload.** For a genuinely large database, have the browser talk to S3 directly so
-the bytes never touch your runtime. That needs CORS on the bucket, which is the thing bucketcode
+the bytes never touch your runtime. That needs CORS on the bucket, which is the thing s3nd
 otherwise saves you from — worth it above a certain size, not before. Today you build it over
 `store.client`; v0.2 makes it first-class, along with multipart.
 

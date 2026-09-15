@@ -9,7 +9,7 @@ The whole flow is two routes on your server and two calls from the browser.
 
 ```ts
 // lib/store.ts
-import { createBucket } from 'bucketcode'
+import { createBucket } from 's3nd'
 
 export const store = createBucket({
   bucket: process.env.S3_BUCKET,

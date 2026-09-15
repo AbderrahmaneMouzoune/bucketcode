@@ -1,11 +1,11 @@
-# bucketcode docs
+# s3nd docs
 
 The documentation site, built on [Fumadocs](https://fumadocs.dev) — Next.js App Router, MDX content,
 built-in search, table of contents and light/dark themes.
 
 ```sh
-bun run --filter @bucketcode/docs dev    # localhost:3100
-bun run --filter @bucketcode/docs build
+bun run --filter @s3nd/docs dev    # localhost:3100
+bun run --filter @s3nd/docs build
 ```
 
 ## Where the content lives

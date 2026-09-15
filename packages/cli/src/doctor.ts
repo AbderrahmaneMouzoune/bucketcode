@@ -1,7 +1,7 @@
 import { GetBucketLifecycleConfigurationCommand, HeadBucketCommand } from '@aws-sdk/client-s3'
 import { randomUUID } from 'node:crypto'
 
-import type { Bucket } from 'bucketcode'
+import type { Bucket } from 's3nd'
 
 export type CheckStatus = 'ok' | 'warn' | 'fail'
 
@@ -84,19 +84,19 @@ export async function runChecks(bucket: Bucket, prefix?: string): Promise<Check[
     return checks
   }
 
-  // A permissions check that actually exercises the three verbs bucketcode
+  // A permissions check that actually exercises the three verbs s3nd
   // needs, rather than trusting a policy document to say what it means.
-  const probeKey = `__bucketcode-doctor/${randomUUID()}`
+  const probeKey = `__s3nd-doctor/${randomUUID()}`
   try {
-    await bucket.put(probeKey, 'bucketcode doctor', { contentType: 'text/plain' })
+    await bucket.put(probeKey, 's3nd doctor', { contentType: 'text/plain' })
     const readBack = await bucket.get(probeKey)
     const body = readBack ? await readBack.text() : undefined
     await bucket.delete(probeKey)
 
     checks.push({
       name: 'Write, read, delete',
-      status: body === 'bucketcode doctor' ? 'ok' : 'fail',
-      detail: body === 'bucketcode doctor' ? 'round-tripped a probe object' : 'the probe did not read back intact',
+      status: body === 's3nd doctor' ? 'ok' : 'fail',
+      detail: body === 's3nd doctor' ? 'round-tripped a probe object' : 'the probe did not read back intact',
     })
   } catch (error) {
     checks.push({
@@ -115,7 +115,7 @@ export async function runChecks(bucket: Bucket, prefix?: string): Promise<Check[
 /**
  * `expiresIn` stops a transfer being *handed over*; it does not remove the
  * object. Only a lifecycle rule does that, and forgetting it is the single
- * most common way a bucketcode bucket goes wrong.
+ * most common way a s3nd bucket goes wrong.
  */
 async function checkLifecycle(bucket: Bucket, prefix?: string): Promise<Check> {
   const scope = prefix ? `the "${prefix}" prefix` : 'the bucket'

@@ -25,7 +25,7 @@ function postSnapshot(body: unknown): Request {
 function postFile(bytes: Uint8Array, filename: string, contentType = 'application/pdf'): Request {
   return new Request(BASE, {
     method: 'POST',
-    headers: { 'content-type': contentType, 'x-bucketcode-filename': encodeURIComponent(filename) },
+    headers: { 'content-type': contentType, 'x-s3nd-filename': encodeURIComponent(filename) },
     // The DOM lib admits a Uint8Array only under a narrower ArrayBuffer
     // parameter than TextEncoder produces; the bytes themselves are fine.
     body: bytes as BodyInit,

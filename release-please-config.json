@@ -4,7 +4,7 @@
   "include-component-in-tag": true,
   "bump-minor-pre-major": true,
   "pull-request-title-pattern": "chore: release ${version}",
-  "pull-request-header": "The next release of the bucketcode packages, prepared by release-please. Merging it bumps the versions, writes the changelogs, tags the commits and publishes to npm.",
+  "pull-request-header": "The next release of the s3nd packages, prepared by release-please. Merging it bumps the versions, writes the changelogs, tags the commits and publishes to npm.",
   "changelog-sections": [
     {
       "type": "feat",
@@ -64,22 +64,22 @@
   "packages": {
     "packages/protocol": {
       "release-type": "node",
-      "package-name": "@bucketcode/protocol",
+      "package-name": "@s3nd/protocol",
       "component": "protocol"
     },
-    "packages/bucketcode": {
+    "packages/s3nd": {
       "release-type": "node",
-      "package-name": "bucketcode",
-      "component": "bucketcode"
+      "package-name": "s3nd",
+      "component": "s3nd"
     },
     "packages/react": {
       "release-type": "node",
-      "package-name": "@bucketcode/react",
+      "package-name": "@s3nd/react",
       "component": "react"
     },
     "packages/cli": {
       "release-type": "node",
-      "package-name": "@bucketcode/cli",
+      "package-name": "@s3nd/cli",
       "component": "cli"
     }
   },

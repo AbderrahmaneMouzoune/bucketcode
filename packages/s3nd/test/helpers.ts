@@ -23,17 +23,17 @@ export function createStubClient(response: Record<string, unknown> = {}, error?:
   return { client: { send, destroy: vi.fn() } as unknown as S3Client, calls, send }
 }
 
-/** Removes every environment variable bucketcode reads, so tests are hermetic. */
+/** Removes every environment variable s3nd reads, so tests are hermetic. */
 export function clearBucketEnv(): void {
   for (const name of [
-    'BUCKETCODE_BUCKET',
+    'S3ND_BUCKET',
     'S3_BUCKET',
-    'BUCKETCODE_REGION',
+    'S3ND_REGION',
     'AWS_REGION',
     'AWS_DEFAULT_REGION',
-    'BUCKETCODE_ENDPOINT',
+    'S3ND_ENDPOINT',
     'S3_ENDPOINT',
-    'BUCKETCODE_PUBLIC_URL',
+    'S3ND_PUBLIC_URL',
     'S3_PUBLIC_URL',
   ]) {
     vi.stubEnv(name, undefined)

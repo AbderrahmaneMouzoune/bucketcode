@@ -1,7 +1,7 @@
 import type { TransferErrorBody, TransferErrorCode } from './types.js'
 
 /**
- * What every protocol client throws. Separate from `BucketCodeError` on
+ * What every protocol client throws. Separate from `S3ndError` on
  * purpose: that one means "something went wrong talking to S3", this one means
  * "the server answered, and said no".
  */

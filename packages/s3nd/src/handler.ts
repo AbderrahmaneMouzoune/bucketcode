@@ -1,14 +1,14 @@
 import { Readable } from 'node:stream'
 
 import type { Bucket } from './bucket.js'
-import { BucketCodeError, isBucketCodeError } from '@bucketcode/protocol'
-import { FILENAME_HEADER, TRANSFER_ERROR_STATUS } from '@bucketcode/protocol'
-import type { CreatedTransfer, CreateSnapshotBody, TransferErrorCode, TransferMetadata } from '@bucketcode/protocol'
+import { S3ndError, isS3ndError } from '@s3nd/protocol'
+import { FILENAME_HEADER, TRANSFER_ERROR_STATUS } from '@s3nd/protocol'
+import type { CreatedTransfer, CreateSnapshotBody, TransferErrorCode, TransferMetadata } from '@s3nd/protocol'
 
 /** Marks a stored object as opaque bytes rather than a snapshot envelope. */
-const KIND_METADATA_KEY = 'bucketcode-kind'
+const KIND_METADATA_KEY = 's3nd-kind'
 /** Files carry their expiry here; snapshots carry it inside their envelope. */
-const EXPIRES_METADATA_KEY = 'bucketcode-expires-at'
+const EXPIRES_METADATA_KEY = 's3nd-expires-at'
 const DEFAULT_BASE_PATH = '/api/transfers'
 const DEFAULT_EXPIRES_IN = 3600
 /** A fresh code is 40 bits — a collision needs bad luck, not many retries. */
@@ -34,7 +34,7 @@ export interface TransferHandlerConfig {
    * transfers that do not expire.
    *
    * Expiry is enforced on read; removing the object itself is an S3 lifecycle
-   * rule's job. `bucketcode doctor` checks whether you have one.
+   * rule's job. `s3nd doctor` checks whether you have one.
    */
   expiresIn?: number | null
   /**
@@ -64,8 +64,8 @@ function fail(code: TransferErrorCode, message: string): Response {
   return Response.json({ error: { code, message } }, { status: TRANSFER_ERROR_STATUS[code] })
 }
 
-/** Every BucketCodeError that means something to a client gets its own code. */
-function fromBucketCodeError(error: BucketCodeError): Response {
+/** Every S3ndError that means something to a client gets its own code. */
+function fromS3ndError(error: S3ndError): Response {
   switch (error.code) {
     case 'FILE_TOO_LARGE':
       return fail('TOO_LARGE', error.message)
@@ -113,7 +113,7 @@ function discard(body: unknown): void {
 }
 
 /**
- * Serves the bucketcode transfer protocol over anything with `Request` and
+ * Serves the s3nd transfer protocol over anything with `Request` and
  * `Response` — a Next route handler, Hono, `Bun.serve`, Deno, a worker.
  *
  * ```ts
@@ -151,13 +151,13 @@ export function createTransferHandler(config: TransferHandlerConfig): TransferHa
       try {
         return await write(bucket.codes.create())
       } catch (error) {
-        if (!isBucketCodeError(error) || error.code !== 'PRECONDITION_FAILED') throw error
+        if (!isS3ndError(error) || error.code !== 'PRECONDITION_FAILED') throw error
         last = error
       }
     }
 
     throw last instanceof Error
-      ? new BucketCodeError('PRECONDITION_FAILED', `Could not find a free code in ${CODE_ATTEMPTS} attempts.`)
+      ? new S3ndError('PRECONDITION_FAILED', `Could not find a free code in ${CODE_ATTEMPTS} attempts.`)
       : last
   }
 
@@ -328,7 +328,7 @@ export function createTransferHandler(config: TransferHandlerConfig): TransferHa
     try {
       code = normalize(rawCode)
     } catch (error) {
-      if (isBucketCodeError(error)) return fromBucketCodeError(error)
+      if (isS3ndError(error)) return fromS3ndError(error)
       throw error
     }
 
@@ -353,7 +353,7 @@ export function createTransferHandler(config: TransferHandlerConfig): TransferHa
     try {
       return await route(request)
     } catch (error) {
-      if (isBucketCodeError(error)) return fromBucketCodeError(error)
+      if (isS3ndError(error)) return fromS3ndError(error)
 
       throw error
     }

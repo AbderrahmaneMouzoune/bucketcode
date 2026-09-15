@@ -1,15 +1,15 @@
-# @bucketcode/react
+# @s3nd/react
 
 React hooks for moving a local-first app's data between devices: send a snapshot or a file, read a
 code back, and an input that repairs the code as the user types it.
 
 ```sh
-npm install @bucketcode/react
+npm install @s3nd/react
 ```
 
 **It never sees a storage credential, and never pulls a storage client.** Its whole dependency tree
-is `@bucketcode/protocol` and `nanoid`, with React as a peer — the AWS SDK stays on your server,
-where `bucketcode` runs. That separation is the reason this is its own package.
+is `@s3nd/protocol` and `nanoid`, with React as a peer — the AWS SDK stays on your server,
+where `s3nd` runs. That separation is the reason this is its own package.
 
 React 18 or later. Every export is a client hook, and the build carries `'use client'`, so it drops
 straight into the Next.js App Router.
@@ -20,10 +20,10 @@ Point the provider at wherever you mounted
 [the transfer routes](https://github.com/AbderrahmaneMouzoune/bucketcode/blob/main/apps/docs/content/docs/protocol.mdx):
 
 ```tsx
-import { BucketcodeProvider } from '@bucketcode/react'
+import { S3ndProvider } from '@s3nd/react'
 
 export default function Providers({ children }) {
-  return <BucketcodeProvider baseUrl="/api/transfers">{children}</BucketcodeProvider>
+  return <S3ndProvider baseUrl="/api/transfers">{children}</S3ndProvider>
 }
 ```
 
@@ -33,7 +33,7 @@ with no network at all.
 ## Sending
 
 ```tsx
-import { useSendTransfer } from '@bucketcode/react'
+import { useSendTransfer } from '@s3nd/react'
 
 function MoveToAnotherDevice() {
   const { send, transfer, isPending, error } = useSendTransfer()
@@ -59,7 +59,7 @@ The call returns `null` when it failed, for callers that want to branch.
 ## Receiving
 
 ```tsx
-import { useReceiveTransfer, useSyncCodeInput } from '@bucketcode/react'
+import { useReceiveTransfer, useSyncCodeInput } from '@s3nd/react'
 
 function RestoreFromCode() {
   const input = useSyncCodeInput()

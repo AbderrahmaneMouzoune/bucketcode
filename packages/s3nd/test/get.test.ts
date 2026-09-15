@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBucket } from '../src/bucket.js'
-import type { BucketCodeError } from '@bucketcode/protocol'
+import type { S3ndError } from '@s3nd/protocol'
 import { clearBucketEnv, createStubClient, notFoundError, s3Body } from './helpers.js'
 
 beforeEach(clearBucketEnv)
@@ -81,7 +81,7 @@ describe('get', () => {
     const { client } = createStubClient({}, cause)
     const bucket = createBucket({ bucket: 'assets', client })
 
-    const error = (await bucket.get('XK5892').catch((e) => e)) as BucketCodeError
+    const error = (await bucket.get('XK5892').catch((e) => e)) as S3ndError
 
     expect(error.code).toBe('GET_FAILED')
     expect(error.cause).toBe(cause)

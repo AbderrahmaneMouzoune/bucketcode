@@ -23,7 +23,7 @@ sense. Both halves are configurable, because a code someone reads over the phone
 not be eight characters:
 
 ```ts
-import { createBucket, syncCodeAlphabets } from 'bucketcode'
+import { createBucket, syncCodeAlphabets } from 's3nd'
 
 const store = createBucket({
   bucket: 'my-bucket',
@@ -69,7 +69,7 @@ try {
   const code = store.codes.normalize(typed)
   return await store.getSnapshot(code)
 } catch (error) {
-  if (isBucketCodeError(error) && error.code === 'INVALID_SYNC_CODE') {
+  if (isS3ndError(error) && error.code === 'INVALID_SYNC_CODE') {
     return Response.json({ error: 'That does not look like a code' }, { status: 400 })
   }
 

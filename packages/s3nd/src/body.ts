@@ -1,6 +1,6 @@
 import type { Readable } from 'node:stream'
 
-import { BucketCodeError } from '@bucketcode/protocol'
+import { S3ndError } from '@s3nd/protocol'
 import { DEFAULT_CONTENT_TYPE } from './mime.js'
 import type { UploadBody } from './types.js'
 
@@ -38,7 +38,7 @@ function isWebStream(value: unknown): value is ReadableStream {
 
 function assertStreamLength(contentLength: number | undefined): number {
   if (typeof contentLength !== 'number' || !Number.isFinite(contentLength) || contentLength < 0) {
-    throw new BucketCodeError(
+    throw new S3ndError(
       'MISSING_CONTENT_LENGTH',
       'Uploading a stream requires an explicit `contentLength` (in bytes): a single PutObject ' +
         'request cannot use chunked encoding. Pass `contentLength`, or buffer the stream first. ' +
@@ -55,7 +55,7 @@ function assertStreamLength(contentLength: number | undefined): number {
  */
 export async function normalizeBody(input: UploadBody, contentLength?: number): Promise<NormalizedBody> {
   if (input == null) {
-    throw new BucketCodeError('INVALID_BODY', 'Upload body is required.')
+    throw new S3ndError('INVALID_BODY', 'Upload body is required.')
   }
 
   if (typeof input === 'string') {
@@ -90,7 +90,7 @@ export async function normalizeBody(input: UploadBody, contentLength?: number): 
     return { body: input, contentLength: assertStreamLength(contentLength) }
   }
 
-  throw new BucketCodeError(
+  throw new S3ndError(
     'INVALID_BODY',
     'Unsupported upload body. Expected a string, Buffer, Uint8Array, ArrayBuffer, Blob/File, ' +
       `Node Readable or web ReadableStream, received ${typeof input}.`,

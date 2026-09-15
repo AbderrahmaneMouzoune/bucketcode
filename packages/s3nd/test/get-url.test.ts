@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBucket } from '../src/bucket.js'
-import type { BucketCodeError } from '@bucketcode/protocol'
+import type { S3ndError } from '@s3nd/protocol'
 import { clearBucketEnv, createStubClient } from './helpers.js'
 
 const credentials = { accessKeyId: 'AKIAIOSFODNN7EXAMPLE', secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY' }
@@ -57,7 +57,7 @@ describe('getUrl', () => {
   it('refuses a public URL when none is configured', async () => {
     const error = (await signingBucket()
       .getUrl('a.txt', { signed: false })
-      .catch((e) => e)) as BucketCodeError
+      .catch((e) => e)) as S3ndError
 
     expect(error.code).toBe('URL_FAILED')
     expect(error.message).toMatch(/publicUrl/)

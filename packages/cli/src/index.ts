@@ -3,28 +3,28 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { basename, resolve as resolvePath } from 'node:path'
 import { parseArgs } from 'node:util'
 
-import { createBucket, createTransferHandler, isBucketCodeError } from 'bucketcode'
-import { createTransferClient, isTransferError, type TransferClient } from '@bucketcode/protocol'
+import { createBucket, createTransferHandler, isS3ndError } from 's3nd'
+import { createTransferClient, isTransferError, type TransferClient } from '@s3nd/protocol'
 
 import { runChecks, type Check } from './doctor.js'
 
 declare const __VERSION__: string
 
 /** Any absolute URL works: in local mode nothing is ever put on a socket. */
-const LOCAL_BASE_URL = 'http://bucketcode.local/api/transfers'
+const LOCAL_BASE_URL = 'http://s3nd.local/api/transfers'
 
-const USAGE = `bucketcode — move files and app state between devices through your own bucket
+const USAGE = `s3nd — move files and app state between devices through your own bucket
 
 Usage
-  bucketcode put <file>            Store a file, print the code to carry
-  bucketcode get <code>            Fetch what a code points at
-  bucketcode rm <code>             Burn a code
-  bucketcode doctor                Check this environment can actually store transfers
+  s3nd put <file>            Store a file, print the code to carry
+  s3nd get <code>            Fetch what a code points at
+  s3nd rm <code>             Burn a code
+  s3nd doctor                Check this environment can actually store transfers
 
 Options
-  --remote <url>       Talk to a bucketcode server instead of S3 directly
+  --remote <url>       Talk to a s3nd server instead of S3 directly
   --token <token>      Bearer token sent with --remote
-  --bucket <name>      Bucket name (default: $BUCKETCODE_BUCKET)
+  --bucket <name>      Bucket name (default: $S3ND_BUCKET)
   --prefix <prefix>    Key prefix inside the bucket
   --expires-in <secs>  Transfer lifetime, 0 for none (default: 3600)
   -o, --output <path>  Where to write (get). "-" is stdout
@@ -33,13 +33,13 @@ Options
   -v, --version        Version
 
 Environment
-  BUCKETCODE_BUCKET, BUCKETCODE_REGION, BUCKETCODE_ENDPOINT, BUCKETCODE_PUBLIC_URL
+  S3ND_BUCKET, S3ND_REGION, S3ND_ENDPOINT, S3ND_PUBLIC_URL
   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
 
 Examples
-  bucketcode put ./report.pdf
-  bucketcode get K7QP2M4X -o ./report.pdf
-  bucketcode --remote https://drop.example.com/api/transfers put ./report.pdf
+  s3nd put ./report.pdf
+  s3nd get K7QP2M4X -o ./report.pdf
+  s3nd --remote https://drop.example.com/api/transfers put ./report.pdf
 `
 
 const options = {
@@ -195,10 +195,10 @@ async function commandDoctor(flags: Flags): Promise<void> {
 /** Against a server, the only meaningful check is a real round trip. */
 async function remoteChecks(flags: Flags): Promise<Check[]> {
   const { client } = buildClient(flags)
-  const probe = { bucketcode: 'doctor', at: new Date().toISOString() }
+  const probe = { s3nd: 'doctor', at: new Date().toISOString() }
 
   try {
-    const created = await client.createSnapshot({ data: probe, device: 'bucketcode doctor' })
+    const created = await client.createSnapshot({ data: probe, device: 's3nd doctor' })
     const readBack = await client.read(created.code)
     await client.remove(created.code)
 
@@ -238,14 +238,14 @@ async function main(argv: string[]): Promise<void> {
   // Everything the caller got wrong is reported before any bucket is resolved:
   // a typo should not come back as "no bucket configured".
   if (command !== 'put' && command !== 'get' && command !== 'rm') {
-    throw new UsageError(`Unknown command "${command}". Run \`bucketcode --help\`.`)
+    throw new UsageError(`Unknown command "${command}". Run \`s3nd --help\`.`)
   }
 
   if (!argument) {
     throw new UsageError(
       command === 'put'
-        ? 'put needs a file: bucketcode put ./report.pdf'
-        : `${command} needs a code: bucketcode ${command} K7QP2M4X`,
+        ? 'put needs a file: s3nd put ./report.pdf'
+        : `${command} needs a code: s3nd ${command} K7QP2M4X`,
     )
   }
 
@@ -268,7 +268,7 @@ main(process.argv.slice(2)).catch((error: unknown) => {
     process.stderr.write(`${error.message}\n`)
   } else if (isTransferError(error)) {
     process.stderr.write(`${error.code}: ${error.message}\n`)
-  } else if (isBucketCodeError(error)) {
+  } else if (isS3ndError(error)) {
     process.stderr.write(`${error.code}: ${error.message}\n`)
   } else {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)

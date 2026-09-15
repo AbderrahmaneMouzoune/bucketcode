@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { BucketCodeError } from '@bucketcode/protocol'
+import { S3ndError } from '@s3nd/protocol'
 import { assertValidKey, encodeKey, generateKey, joinKey, normalizePrefix, sanitizeFilename } from '../src/key.js'
 
 describe('assertValidKey', () => {
@@ -18,7 +18,7 @@ describe('assertValidKey', () => {
     ['a traversal segment', 'uploads/../../etc/passwd'],
     ['a dot segment', 'uploads/./a.png'],
   ])('rejects %s', (_label, key) => {
-    expect(() => assertValidKey(key)).toThrowError(BucketCodeError)
+    expect(() => assertValidKey(key)).toThrowError(S3ndError)
   })
 
   it('rejects non-strings', () => {
@@ -39,7 +39,7 @@ describe('assertValidKey', () => {
       assertValidKey('/nope')
       expect.unreachable()
     } catch (error) {
-      expect((error as BucketCodeError).code).toBe('INVALID_KEY')
+      expect((error as S3ndError).code).toBe('INVALID_KEY')
     }
   })
 })

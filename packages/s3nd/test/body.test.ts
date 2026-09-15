@@ -3,7 +3,7 @@ import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 
 import { normalizeBody } from '../src/body.js'
-import type { BucketCodeError } from '@bucketcode/protocol'
+import type { S3ndError } from '@s3nd/protocol'
 
 describe('normalizeBody', () => {
   it('rejects a missing body', async () => {
@@ -83,7 +83,7 @@ describe('normalizeBody', () => {
   })
 
   it('rejects anything else', async () => {
-    const error = (await normalizeBody({ nope: true } as never).catch((e) => e)) as BucketCodeError
+    const error = (await normalizeBody({ nope: true } as never).catch((e) => e)) as S3ndError
 
     expect(error.code).toBe('INVALID_BODY')
   })

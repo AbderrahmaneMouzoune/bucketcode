@@ -1,11 +1,11 @@
 /**
- * The wire contract between a bucketcode server and anything that talks to it —
+ * The wire contract between a s3nd server and anything that talks to it —
  * a browser, the CLI, another service.
  *
  * It is deliberately small and framework-free. `createTransferHandler()` is one
  * implementation of this contract, but the point of writing it down is that it
  * is not the only possible one: a Rails or Go backend that answers these four
- * routes works with every bucketcode client, and the CLI pointed at `--remote`
+ * routes works with every s3nd client, and the CLI pointed at `--remote`
  * cannot tell the difference.
  *
  * Nothing in this directory may import the AWS SDK. That is what keeps the
@@ -16,7 +16,7 @@
 export const PROTOCOL_VERSION = 1
 
 /** Header a raw upload uses to carry the original filename. */
-export const FILENAME_HEADER = 'x-bucketcode-filename'
+export const FILENAME_HEADER = 'x-s3nd-filename'
 
 /**
  * What sits behind a code.

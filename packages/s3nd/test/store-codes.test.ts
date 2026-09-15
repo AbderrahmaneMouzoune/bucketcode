@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createBucket } from '../src/bucket.js'
-import { syncCodeAlphabets } from '@bucketcode/protocol'
+import { syncCodeAlphabets } from '@s3nd/protocol'
 import { createStubClient } from './helpers.js'
 
 describe('store.codes', () => {

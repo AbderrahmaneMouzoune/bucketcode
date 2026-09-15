@@ -3,7 +3,7 @@ import { Readable } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBucket } from '../src/bucket.js'
-import type { BucketCodeError } from '@bucketcode/protocol'
+import type { S3ndError } from '@s3nd/protocol'
 import { clearBucketEnv, createStubClient } from './helpers.js'
 
 beforeEach(clearBucketEnv)
@@ -143,7 +143,7 @@ describe('upload', () => {
     const { client, send } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', maxSize: 4, client })
 
-    const error = (await bucket.upload(Buffer.alloc(5)).catch((e) => e)) as BucketCodeError
+    const error = (await bucket.upload(Buffer.alloc(5)).catch((e) => e)) as S3ndError
 
     expect(error.code).toBe('FILE_TOO_LARGE')
     expect(send).not.toHaveBeenCalled()
@@ -193,7 +193,7 @@ describe('upload', () => {
     const { client } = createStubClient({}, cause)
     const bucket = createBucket({ bucket: 'assets', client })
 
-    const error = (await bucket.upload('x', { key: 'a.txt' }).catch((e) => e)) as BucketCodeError
+    const error = (await bucket.upload('x', { key: 'a.txt' }).catch((e) => e)) as S3ndError
 
     expect(error.code).toBe('UPLOAD_FAILED')
     expect(error.message).toContain('NoSuchBucket')

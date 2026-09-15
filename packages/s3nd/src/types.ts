@@ -1,7 +1,7 @@
 import type { ObjectCannedACL, S3Client } from '@aws-sdk/client-s3'
 import type { Readable } from 'node:stream'
 
-import type { SyncCodeOptions } from '@bucketcode/protocol'
+import type { SyncCodeOptions } from '@s3nd/protocol'
 
 /**
  * Everything `upload()` accepts. Streams are part of the signature from v0.1
@@ -17,9 +17,9 @@ export interface BucketCredentials {
 }
 
 export interface BucketConfig {
-  /** Bucket name. Falls back to `BUCKETCODE_BUCKET` or `S3_BUCKET`. */
+  /** Bucket name. Falls back to `S3ND_BUCKET` or `S3_BUCKET`. */
   bucket?: string
-  /** Region. Falls back to `BUCKETCODE_REGION`, `AWS_REGION`, `AWS_DEFAULT_REGION`. */
+  /** Region. Falls back to `S3ND_REGION`, `AWS_REGION`, `AWS_DEFAULT_REGION`. */
   region?: string
   /**
    * Static credentials. Omit to use the AWS default provider chain
@@ -28,7 +28,7 @@ export interface BucketConfig {
   credentials?: BucketCredentials
   /**
    * Custom endpoint for S3-compatible storage (R2, MinIO, Scaleway, Wasabi…).
-   * Falls back to `BUCKETCODE_ENDPOINT` or `S3_ENDPOINT`.
+   * Falls back to `S3ND_ENDPOINT` or `S3_ENDPOINT`.
    */
   endpoint?: string
   /** Defaults to `true` when a custom `endpoint` is set, `false` otherwise. */
@@ -36,7 +36,7 @@ export interface BucketConfig {
   /**
    * Public base URL (CDN or public bucket). When set, `upload()` returns a
    * ready-to-use `url` and `getUrl()` returns an unsigned URL by default.
-   * Falls back to `BUCKETCODE_PUBLIC_URL` or `S3_PUBLIC_URL`.
+   * Falls back to `S3ND_PUBLIC_URL` or `S3_PUBLIC_URL`.
    */
   publicUrl?: string
   /** Prefix prepended to every key, e.g. `"uploads"` or `"tenant-42/avatars"`. */
@@ -166,8 +166,8 @@ export interface GetUrlOptions {
  * restores a snapshot can tell what wrote it, when, and for which schema.
  */
 export interface SnapshotEnvelope {
-  /** Envelope format version — bucketcode's, not your data's. */
-  bucketcode: number
+  /** Envelope format version — s3nd's, not your data's. */
+  s3nd: number
   /** Your application's name, when you pass one. */
   app?: string
   /** Your schema version, so a restore can refuse data it cannot read. */
@@ -186,7 +186,7 @@ export interface PutSnapshotOptions {
   /**
    * Lifetime in seconds. After it, `getSnapshot()` reports the snapshot as
    * gone. The object itself is removed by an S3 lifecycle rule, not by
-   * bucketcode. Omit for a snapshot that does not expire.
+   * s3nd. Omit for a snapshot that does not expire.
    */
   expiresIn?: number
   /** gzip before uploading. Defaults to `true` — snapshots are repetitive JSON. */
@@ -238,4 +238,4 @@ export interface Snapshot<T = unknown> {
   size?: number
 }
 
-export type { SyncCodeOptions, SyncCodes } from '@bucketcode/protocol'
+export type { SyncCodeOptions, SyncCodes } from '@s3nd/protocol'

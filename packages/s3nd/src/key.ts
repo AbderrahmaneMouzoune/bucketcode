@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { BucketCodeError } from '@bucketcode/protocol'
+import { S3ndError } from '@s3nd/protocol'
 
 /** S3 hard limit: an object key is at most 1024 bytes of UTF-8. */
 const MAX_KEY_BYTES = 1024
@@ -14,35 +14,35 @@ const UNSAFE_FILENAME_CHARACTERS = /[^a-zA-Z0-9._-]+/g
  */
 export function assertValidKey(key: unknown): asserts key is string {
   if (typeof key !== 'string' || key.length === 0) {
-    throw new BucketCodeError('INVALID_KEY', 'Object key must be a non-empty string.')
+    throw new S3ndError('INVALID_KEY', 'Object key must be a non-empty string.')
   }
 
   if (key.startsWith('/')) {
-    throw new BucketCodeError('INVALID_KEY', `Object key must not start with "/" (received "${key}").`)
+    throw new S3ndError('INVALID_KEY', `Object key must not start with "/" (received "${key}").`)
   }
 
   if (key.endsWith('/')) {
-    throw new BucketCodeError('INVALID_KEY', `Object key must not end with "/" (received "${key}").`)
+    throw new S3ndError('INVALID_KEY', `Object key must not end with "/" (received "${key}").`)
   }
 
   if (key.includes('\\')) {
-    throw new BucketCodeError('INVALID_KEY', `Object key must not contain backslashes (received "${key}").`)
+    throw new S3ndError('INVALID_KEY', `Object key must not contain backslashes (received "${key}").`)
   }
 
   if (key.includes('//')) {
-    throw new BucketCodeError('INVALID_KEY', `Object key must not contain empty path segments (received "${key}").`)
+    throw new S3ndError('INVALID_KEY', `Object key must not contain empty path segments (received "${key}").`)
   }
 
   if (key.split('/').some((segment) => segment === '.' || segment === '..')) {
-    throw new BucketCodeError('INVALID_KEY', `Object key must not contain "." or ".." segments (received "${key}").`)
+    throw new S3ndError('INVALID_KEY', `Object key must not contain "." or ".." segments (received "${key}").`)
   }
 
   if (CONTROL_CHARACTERS.test(key)) {
-    throw new BucketCodeError('INVALID_KEY', 'Object key must not contain control characters.')
+    throw new S3ndError('INVALID_KEY', 'Object key must not contain control characters.')
   }
 
   if (Buffer.byteLength(key, 'utf8') > MAX_KEY_BYTES) {
-    throw new BucketCodeError('INVALID_KEY', `Object key must be at most ${MAX_KEY_BYTES} bytes.`)
+    throw new S3ndError('INVALID_KEY', `Object key must be at most ${MAX_KEY_BYTES} bytes.`)
   }
 }
 

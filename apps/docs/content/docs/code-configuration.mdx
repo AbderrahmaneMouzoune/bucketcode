@@ -7,7 +7,7 @@ A sync code has two knobs, and both live on the store so that generation and nor
 never disagree:
 
 ```ts
-import { createBucket, syncCodeAlphabets } from 'bucketcode'
+import { createBucket, syncCodeAlphabets } from 's3nd'
 
 const store = createBucket({
   bucket: 'my-bucket',
@@ -125,7 +125,7 @@ If you need a real transition — long-lived codes, or a shape change you cannot
 old scheme around for reads:
 
 ```ts
-import { createSyncCodes, syncCodeAlphabets } from 'bucketcode'
+import { createSyncCodes, syncCodeAlphabets } from 's3nd'
 
 const legacy = createSyncCodes({ length: 8, alphabet: syncCodeAlphabets.crockford })
 
@@ -147,7 +147,7 @@ expired.
 store at hand:
 
 ```ts
-import { createSyncCode, createSyncCodes, normalizeSyncCode } from 'bucketcode'
+import { createSyncCode, createSyncCodes, normalizeSyncCode } from 's3nd'
 
 const codes = createSyncCodes({ length: 6 })
 

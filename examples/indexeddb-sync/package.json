@@ -1,5 +1,5 @@
 {
-  "name": "@bucketcode/example-indexeddb-sync",
+  "name": "@s3nd/example-indexeddb-sync",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "bucketcode": "workspace:*",
+    "s3nd": "workspace:*",
     "next": "^15.1.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

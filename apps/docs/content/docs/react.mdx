@@ -4,14 +4,14 @@ description: 'Hooks for sending and receiving transfers, and an input that repai
 ---
 
 ```sh
-npm install @bucketcode/react
+npm install @s3nd/react
 ```
 
-`@bucketcode/react` never sees a storage credential and never pulls a storage client. Its whole
-dependency tree is `@bucketcode/protocol` and nanoid, with React as a peer — the AWS SDK stays on
-your server, where `bucketcode` runs.
+`@s3nd/react` never sees a storage credential and never pulls a storage client. Its whole
+dependency tree is `@s3nd/protocol` and nanoid, with React as a peer — the AWS SDK stays on
+your server, where `s3nd` runs.
 
-That is the reason it is a separate package. If the hooks lived in `bucketcode`, installing them
+That is the reason it is a separate package. If the hooks lived in `s3nd`, installing them
 would put `@aws-sdk/client-s3` in every front-end's `node_modules` for code that can never run
 there.
 
@@ -25,10 +25,10 @@ Point the provider at wherever you mounted [the transfer routes](/docs/protocol)
 ```tsx title="app/providers.tsx"
 'use client'
 
-import { BucketcodeProvider } from '@bucketcode/react'
+import { S3ndProvider } from '@s3nd/react'
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <BucketcodeProvider baseUrl="/api/transfers">{children}</BucketcodeProvider>
+  return <S3ndProvider baseUrl="/api/transfers">{children}</S3ndProvider>
 }
 ```
 
@@ -36,13 +36,13 @@ Pass `headers` for a token. Pass `client` to bring your own — which is how you
 tests, with no network at all:
 
 ```tsx
-<BucketcodeProvider client={fakeClient}>{children}</BucketcodeProvider>
+<S3ndProvider client={fakeClient}>{children}</S3ndProvider>
 ```
 
 ## The sending device
 
 ```tsx
-import { useSendTransfer } from '@bucketcode/react'
+import { useSendTransfer } from '@s3nd/react'
 
 function MoveToAnotherDevice() {
   const { send, transfer, isPending, error } = useSendTransfer()
@@ -80,7 +80,7 @@ const { sendFile } = useSendTransfer()
 ## The receiving device
 
 ```tsx
-import { useReceiveTransfer, useSyncCodeInput } from '@bucketcode/react'
+import { useReceiveTransfer, useSyncCodeInput } from '@s3nd/react'
 
 function RestoreFromCode() {
   const input = useSyncCodeInput()
