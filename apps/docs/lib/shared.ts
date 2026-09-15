@@ -1,9 +1,9 @@
-export const appName = 'bucketcode'
+export const appName = 's3nd'
 export const docsRoute = '/docs'
 
 export const gitConfig = {
   user: 'AbderrahmaneMouzoune',
-  repo: 'bucketcode',
+  repo: 's3nd',
   branch: 'main',
 }
 

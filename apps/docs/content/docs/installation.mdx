@@ -1,19 +1,36 @@
 ---
 title: 'Installation'
-description: 'Install bucketcode and give it credentials.'
+description: 'Install s3nd and give it credentials.'
 ---
 
 ```sh
-npm install bucketcode
+npm install s3nd
 ```
 
 ```sh
-pnpm add bucketcode
+pnpm add s3nd
 ```
 
 ```sh
-yarn add bucketcode
+yarn add s3nd
 ```
+
+```sh
+bun add s3nd
+```
+
+That is the server-side package. Depending on what you are building you may want one of the
+others instead, or as well:
+
+| Package          | Install it when                                                   |
+| ---------------- | ----------------------------------------------------------------- |
+| `s3nd`           | Your server talks to the bucket. Brings the AWS SDK.              |
+| `@s3nd/react`    | Your React app sends or receives transfers. Never pulls the SDK.  |
+| `@s3nd/cli`      | You want the `s3nd` command. Install it globally.                 |
+| `@s3nd/protocol` | You are writing a client or server for a runtime the others miss. |
+
+`@s3nd/react` depends on `@s3nd/protocol`, never on `s3nd`, so a front-end
+install does not drag a storage client into `node_modules`.
 
 Node 20 or later — that is what AWS SDK v3 requires. `@aws-sdk/client-s3` and
 `@aws-sdk/s3-request-presigner` come along as dependencies, so there is nothing else to install
@@ -25,10 +42,10 @@ that would put credentials in front of a user.
 
 ## Credentials
 
-bucketcode never asks for credentials it does not need. Pass them explicitly:
+s3nd never asks for credentials it does not need. Pass them explicitly:
 
 ```ts
-import { createBucket } from 'bucketcode'
+import { createBucket } from 's3nd'
 
 const store = createBucket({
   bucket: 'my-bucket',
@@ -62,7 +79,7 @@ See [Configuration](/docs/configuration) for the full list.
 
 ## IAM permissions
 
-The minimum policy for a bucket used by bucketcode:
+The minimum policy for a bucket used by s3nd:
 
 ```json
 {

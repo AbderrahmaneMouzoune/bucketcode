@@ -3,7 +3,7 @@ import { codeToHtml } from 'shiki'
 
 import { repositoryUrl } from '@/lib/shared'
 
-const SAMPLE = `import { createBucket } from 'bucketcode'
+const SAMPLE = `import { createBucket } from 's3nd'
 
 const store = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
 
@@ -50,8 +50,8 @@ export default async function HomePage() {
         Your local-first app, on their other device.
       </h1>
       <p className="text-fd-muted-foreground mt-4 max-w-xl text-lg">
-        IndexedDB never leaves the browser it was written in. bucketcode snapshots that state into a bucket you control,
-        under a code the user carries across. Credentials stay on your server.
+        IndexedDB never leaves the browser it was written in. s3nd snapshots that state into a bucket you control, under
+        a code the user carries across. Credentials stay on your server.
       </p>
 
       <div className="mt-8 flex flex-wrap gap-3">

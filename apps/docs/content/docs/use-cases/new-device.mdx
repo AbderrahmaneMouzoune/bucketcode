@@ -10,7 +10,7 @@ no account to sign into. They read a code off one screen and type it into the ot
 
 ```ts
 // lib/store.ts
-import { createBucket } from 'bucketcode'
+import { createBucket } from 's3nd'
 
 export const store = createBucket({
   bucket: process.env.S3_BUCKET,
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
 ```ts
 // app/api/sync/[code]/route.ts
-import { isBucketCodeError } from 'bucketcode'
+import { isS3ndError } from 's3nd'
 
 import { store, SCHEMA_VERSION } from '@/lib/store'
 
@@ -55,7 +55,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
   try {
     normalized = store.codes.normalize(code)
   } catch (error) {
-    if (isBucketCodeError(error) && error.code === 'INVALID_SYNC_CODE') {
+    if (isS3ndError(error) && error.code === 'INVALID_SYNC_CODE') {
       return Response.json({ error: 'That does not look like a code' }, { status: 400 })
     }
 

@@ -63,7 +63,7 @@ const current = await store.getSnapshot<AppState>(`user-${session.userId}`)
 try {
   await store.putSnapshot(`user-${session.userId}`, state, { ifMatch: current?.etag })
 } catch (error) {
-  if (isBucketCodeError(error) && error.code === 'PRECONDITION_FAILED') {
+  if (isS3ndError(error) && error.code === 'PRECONDITION_FAILED') {
     return Response.json({ error: 'Updated on another device', etag: current?.etag }, { status: 409 })
   }
 

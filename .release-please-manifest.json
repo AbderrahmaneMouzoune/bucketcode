@@ -1,3 +1,6 @@
 {
-  "packages/bucketcode": "0.1.0"
+  "packages/protocol": "0.1.0",
+  "packages/s3nd": "0.1.0",
+  "packages/react": "0.1.0",
+  "packages/cli": "0.1.0"
 }

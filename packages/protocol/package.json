@@ -1,0 +1,67 @@
+{
+  "name": "@s3nd/protocol",
+  "version": "0.1.0",
+  "description": "The s3nd transfer protocol: the wire contract, a fetch-based client, and sync codes. No storage client, so it bundles for a browser.",
+  "keywords": [
+    "s3nd",
+    "protocol",
+    "sync-code",
+    "local-first",
+    "transfer",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Abderrahmane Mouzoune",
+  "homepage": "https://github.com/AbderrahmaneMouzoune/bucketcode/tree/main/packages/protocol#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AbderrahmaneMouzoune/bucketcode.git",
+    "directory": "packages/protocol"
+  },
+  "bugs": {
+    "url": "https://github.com/AbderrahmaneMouzoune/bucketcode/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "nanoid": "^6.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11"
+  }
+}

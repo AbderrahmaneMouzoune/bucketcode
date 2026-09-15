@@ -49,22 +49,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
 
+      # bun installs and orchestrates, but the toolchain still runs on Node:
+      # tsup, eslint and next all ship Node shebangs.
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: bun install --frozen-lockfile
 
-      - run: pnpm format:check
+      - run: bun run format:check
 
-      - run: pnpm lint
+      - run: bun run lint
 
-      - run: pnpm type-check
+      - run: bun run type-check
 
-      - run: pnpm build
+      - run: bun run build
 
   test:
     name: Test on Node ${{ matrix.node-version }}
@@ -79,13 +82,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
 
+      # This is the point of the matrix: these packages are published for
+      # Node, so the suites have to run on Node. `.bin/vitest` carries a
+      # `#!/usr/bin/env node` shebang, so it picks up whichever version this
+      # step installed — bun only resolves the dependency tree.
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: bun install --frozen-lockfile
 
-      - run: pnpm --filter bucketcode test
+      - run: bunx turbo test

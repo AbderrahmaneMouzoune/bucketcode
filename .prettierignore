@@ -5,6 +5,6 @@ next-env.d.ts
 .turbo/
 coverage/
 node_modules/
-pnpm-lock.yaml
+bun.lock
 # written by release-please, in its own markdown style
 CHANGELOG.md

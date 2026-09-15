@@ -1,4 +1,4 @@
-import { createBucket, type Bucket } from 'bucketcode'
+import { createBucket, type Bucket } from 's3nd'
 
 let cached: Bucket | undefined
 

@@ -1,4 +1,4 @@
-import { isBucketCodeError } from 'bucketcode'
+import { isS3ndError } from 's3nd'
 
 import { store, CODE_TTL_SECONDS, SCHEMA_VERSION } from '@/lib/store'
 
@@ -10,7 +10,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await store().putSnapshot(code, state, {
-      app: 'bucketcode-notes',
+      app: 's3nd-notes',
       version: SCHEMA_VERSION,
       device: request.headers.get('user-agent') ?? undefined,
       expiresIn: CODE_TTL_SECONDS,
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
     return Response.json({ code, expiresAt: result.expiresAt, size: result.size }, { status: 201 })
   } catch (error) {
-    if (isBucketCodeError(error) && error.code === 'FILE_TOO_LARGE') {
+    if (isS3ndError(error) && error.code === 'FILE_TOO_LARGE') {
       return Response.json({ error: 'This database is too large to transfer in one piece' }, { status: 413 })
     }
 

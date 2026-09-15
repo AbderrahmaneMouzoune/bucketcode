@@ -1,4 +1,4 @@
-import { isBucketCodeError } from 'bucketcode'
+import { isS3ndError } from 's3nd'
 
 import { store, SCHEMA_VERSION } from '@/lib/store'
 
@@ -11,7 +11,7 @@ function parse(code: string): { code: string } | { response: Response } {
   try {
     return { code: store().codes.normalize(code) }
   } catch (error) {
-    if (isBucketCodeError(error) && error.code === 'INVALID_SYNC_CODE') {
+    if (isS3ndError(error) && error.code === 'INVALID_SYNC_CODE') {
       return { response: Response.json({ error: 'That does not look like a code' }, { status: 400 }) }
     }
 
@@ -28,7 +28,7 @@ export async function GET(_request: Request, { params }: Context) {
   try {
     snapshot = await store().getSnapshot(parsed.code, { maxVersion: SCHEMA_VERSION })
   } catch (error) {
-    if (isBucketCodeError(error) && error.code === 'SNAPSHOT_TOO_NEW') {
+    if (isS3ndError(error) && error.code === 'SNAPSHOT_TOO_NEW') {
       return Response.json({ error: 'That snapshot needs a newer version of this app' }, { status: 409 })
     }
 

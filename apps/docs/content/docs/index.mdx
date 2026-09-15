@@ -1,12 +1,12 @@
 ---
 title: 'Introduction'
-description: 'IndexedDB never leaves the browser it was written in. bucketcode is the piece that carries it across.'
+description: 'IndexedDB never leaves the browser it was written in. s3nd is the piece that carries it across.'
 ---
 
 Move a local-first app's data from one device to another, through your own bucket.
 
 ```ts
-import { createBucket } from 'bucketcode'
+import { createBucket } from 's3nd'
 
 const store = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
 
@@ -34,7 +34,7 @@ functionally, what happened.
 Building the way out is where local-first apps stall: you need a place to put the bytes, a way for
 the second device to find them, and enough structure that a restore does not corrupt the app.
 
-## What bucketcode does
+## What s3nd does
 
 It is the server-side piece of exactly that. Your app hands its local state to your own API; that
 route stores a **snapshot** in a bucket you control, under a short **sync code**; the other device
@@ -58,13 +58,13 @@ It is **not a sync engine.** There is no operational transform, no CRDT, no per-
 A snapshot is the whole state at a point in time, and restoring replaces what is on the receiving
 device. That is the right model for "move my data to my new phone" and the wrong one for "two
 people edit the same document live". If you need the latter, you want a CRDT library — and
-bucketcode can still be where you park its state.
+s3nd can still be where you park its state.
 
 It is **not a general S3 client.** No `list()`, no bucket administration, no lifecycle rules. It
 hands you its underlying client through `store.client`, so the AWS SDK is always one command away.
 
 It is **not encryption.** Your server can read every snapshot it stores. If that is not acceptable
-for your data, encrypt it in the browser and hand bucketcode the ciphertext — see
+for your data, encrypt it in the browser and hand s3nd the ciphertext — see
 [end-to-end encrypted sync](/docs/use-cases/encrypted-sync).
 
 ## Where to go next

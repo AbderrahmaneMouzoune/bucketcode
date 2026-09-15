@@ -11,6 +11,8 @@
     "sync-codes",
     "code-configuration",
     "two-devices",
+    "protocol",
+    "react",
     "---Guides---",
     "configuration",
     "providers",
@@ -23,6 +25,7 @@
     "use-cases/encrypted-sync",
     "use-cases/attachments",
     "---Reference---",
+    "cli",
     "api"
   ]
 }

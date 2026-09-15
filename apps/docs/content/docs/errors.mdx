@@ -1,18 +1,18 @@
 ---
 title: 'Errors'
-description: 'Every failure is a BucketCodeError with a stable code.'
+description: 'Every failure is a S3ndError with a stable code.'
 ---
 
-Everything bucketcode throws is a `BucketCodeError` carrying a `code` you can branch on, and the
+Everything s3nd throws is a `S3ndError` carrying a `code` you can branch on, and the
 underlying error in `cause`:
 
 ```ts
-import { isBucketCodeError } from 'bucketcode'
+import { isS3ndError } from 's3nd'
 
 try {
   await store.putSnapshot(code, state)
 } catch (error) {
-  if (isBucketCodeError(error)) {
+  if (isS3ndError(error)) {
     console.error(error.code, error.message, error.cause)
   }
 
@@ -79,7 +79,7 @@ nothing, and it costs no request.
 ## Mapping to HTTP
 
 ```ts
-import { isBucketCodeError } from 'bucketcode'
+import { isS3ndError } from 's3nd'
 
 const STATUS: Record<string, number> = {
   FILE_TOO_LARGE: 413,
@@ -93,7 +93,7 @@ const STATUS: Record<string, number> = {
 }
 
 export function statusFor(error: unknown): number {
-  return (isBucketCodeError(error) && STATUS[error.code]) || 500
+  return (isS3ndError(error) && STATUS[error.code]) || 500
 }
 ```
 

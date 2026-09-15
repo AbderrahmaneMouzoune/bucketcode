@@ -1,9 +1,9 @@
-# bucketcode
+# s3nd
 
 Move a local-first app's data from one device to another, through your own bucket.
 
 ```ts
-import { createBucket } from 'bucketcode'
+import { createBucket } from 's3nd'
 
 const store = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
 
@@ -17,7 +17,7 @@ snapshot?.data // → the state, ready to write back into IndexedDB
 ```
 
 Your app keeps everything in IndexedDB: fast, offline, private. Then the user opens it on their
-phone and it is empty, because IndexedDB does not leave the browser it was written in. bucketcode
+phone and it is empty, because IndexedDB does not leave the browser it was written in. s3nd
 is the small server-side piece that closes that gap.
 
 Credentials stay on your server — the browser only ever talks to your own API, so there is no CORS
@@ -25,35 +25,57 @@ policy to write on the bucket and nothing to sign client-side. Works with AWS S3
 MinIO, Scaleway and any S3-compatible storage.
 
 ```sh
-npm install bucketcode
+npm install s3nd
 ```
 
 **[Read the documentation →](./apps/docs)** · **[Run the IndexedDB example →](./examples/indexeddb-sync)**
 
 ## This repository
 
-A pnpm workspace monorepo, driven by Turborepo.
+A bun workspace monorepo, driven by Turborepo.
 
-| Path                                                   | What it is                                                   |
-| ------------------------------------------------------ | ------------------------------------------------------------ |
-| [`packages/bucketcode`](./packages/bucketcode)         | The published package.                                       |
-| [`apps/docs`](./apps/docs)                             | The documentation site — guides, use cases, API reference.   |
-| [`examples/indexeddb-sync`](./examples/indexeddb-sync) | A notes app in IndexedDB, moved between devices with a code. |
-| [`examples/node-script`](./examples/node-script)       | Snapshot round-trip, expiry and conflicts in one file.       |
+| Path                                                   | What it is                                                                                                  |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| [`packages/protocol`](./packages/protocol)             | `@s3nd/protocol` — the wire contract, a client, sync codes. No storage client, so it bundles for a browser. |
+| [`packages/s3nd`](./packages/s3nd)                     | `s3nd` — the S3 primitive: snapshots, files, the handler.                                                   |
+| [`packages/react`](./packages/react)                   | `@s3nd/react` — hooks. Depends on the protocol, never on S3.                                                |
+| [`packages/cli`](./packages/cli)                       | `@s3nd/cli` — the `s3nd` binary, built on the primitive.                                                    |
+| [`apps/docs`](./apps/docs)                             | The documentation site — guides, use cases, API reference.                                                  |
+| [`examples/indexeddb-sync`](./examples/indexeddb-sync) | A notes app in IndexedDB, moved between devices with a code.                                                |
+| [`examples/node-script`](./examples/node-script)       | Snapshot round-trip, expiry and conflicts in one file.                                                      |
+
+The split follows one constraint: a browser must never end up with a storage client in its
+dependency tree. `@s3nd/protocol` is what both halves share, which is why it exists at all
+rather than living inside `s3nd`.
+
+```
+@s3nd/protocol   nanoid                      the contract, shared by everything
+s3nd             + aws-sdk, protocol         the S3 primitive
+@s3nd/react      + protocol, react (peer)    hooks — no path to S3
+@s3nd/cli        + s3nd                the binary
+```
 
 ## Working on it
 
+A [bun](https://bun.com) workspace, with [Turborepo](https://turborepo.dev) running the tasks.
+
 ```sh
-pnpm install
-pnpm build        # turbo build across the workspace
-pnpm test         # the package's test suite
-pnpm type-check
-pnpm lint
-pnpm format
+bun install
+bun run build        # turbo build across the workspace
+bun run test         # the package's test suite
+bun run type-check
+bun run lint
+bun run format
 ```
 
-Run the docs site locally with `pnpm --filter @bucketcode/docs dev` — it listens on
+Run the docs site locally with `bun run --filter @s3nd/docs dev` — it listens on
 [localhost:3100](http://localhost:3100).
+
+bun installs and orchestrates; the toolchain itself still runs on Node. That is deliberate rather
+than half-finished: `s3nd` is published for Node, so the test suite runs on Node — CI runs it
+on 20, 22 and 24 — and `.bin/vitest` carries a `#!/usr/bin/env node` shebang, so it picks up
+whichever version is on `PATH`. Switching the runner to `bun test` would trade that coverage for a
+second or two of wall clock.
 
 The test suite is offline: it runs against an in-memory stand-in for S3 that honours the
 conditional headers, so snapshots genuinely round-trip without credentials or network. For an
@@ -79,12 +101,12 @@ the pull request title is the message that counts — CI checks its shape on eve
 | `feat!: …`, or a `BREAKING CHANGE:` footer | 0.2.0 — the major bump waits for 1.0.0 |
 | `chore: …`, `ci: …`, `docs: …`, `test: …`  | nowhere, no release                    |
 
-Only commits touching `packages/bucketcode` release it; the docs site, the examples and the
+Only commits touching `packages/s3nd` release it; the docs site, the examples and the
 workflows do not.
 
 While there is something to release, the [release workflow](./.github/workflows/release.yml) keeps
 a `chore: release x.y.z` pull request open, carrying the version bump and the entry it would add to
-[the changelog](./packages/bucketcode/CHANGELOG.md). Merging it is the release: the commit is
+[the changelog](./packages/s3nd/CHANGELOG.md). Merging it is the release: the commit is
 tagged `vx.y.z`, the GitHub release is created from that changelog entry, and the package is
 published to npm with provenance.
 

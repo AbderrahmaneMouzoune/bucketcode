@@ -14,7 +14,7 @@ Pass the ETag you last read as `ifMatch`. The write only lands if the stored sna
 one you based it on:
 
 ```ts
-import { isBucketCodeError } from 'bucketcode'
+import { isS3ndError } from 's3nd'
 
 const current = await store.getSnapshot<AppState>(`user-${userId}`)
 
@@ -24,7 +24,7 @@ try {
     version: SCHEMA_VERSION,
   })
 } catch (error) {
-  if (isBucketCodeError(error) && error.code === 'PRECONDITION_FAILED') {
+  if (isS3ndError(error) && error.code === 'PRECONDITION_FAILED') {
     // Someone else wrote in between. Read again and merge again.
   }
 
@@ -53,7 +53,7 @@ async function saveWithRetry(userId: string, incoming: AppState, attempts = 3): 
       })
       return
     } catch (error) {
-      if (isBucketCodeError(error) && error.code === 'PRECONDITION_FAILED') continue
+      if (isS3ndError(error) && error.code === 'PRECONDITION_FAILED') continue
       throw error
     }
   }
@@ -86,7 +86,7 @@ are the classic trap — a record missing from the incoming snapshot could be on
 or one the other device has not seen yet, and nothing in the data distinguishes them.
 
 If your app needs real concurrent editing, a snapshot store is the wrong shape. Use a CRDT library
-so merges are defined by the data structure, and keep bucketcode as the place its state lives:
+so merges are defined by the data structure, and keep s3nd as the place its state lives:
 `putSnapshot()` will happily store a serialized CRDT document.
 
 For the common case — one person, several devices, one at a time — read-merge-write with `ifMatch`

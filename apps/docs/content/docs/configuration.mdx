@@ -5,17 +5,17 @@ description: 'Every option createBucket accepts, and the environment variable be
 
 ```ts
 createBucket({
-  bucket: 'my-bucket', // required (or BUCKETCODE_BUCKET / S3_BUCKET)
-  region: 'eu-west-3', // or BUCKETCODE_REGION / AWS_REGION / AWS_DEFAULT_REGION
+  bucket: 'my-bucket', // required (or S3ND_BUCKET / S3_BUCKET)
+  region: 'eu-west-3', // or S3ND_REGION / AWS_REGION / AWS_DEFAULT_REGION
   credentials: {
     // omit to use the AWS default provider chain
     accessKeyId: '…',
     secretAccessKey: '…',
     sessionToken: '…', // optional
   },
-  endpoint: 'https://…', // S3-compatible storage — or BUCKETCODE_ENDPOINT / S3_ENDPOINT
+  endpoint: 'https://…', // S3-compatible storage — or S3ND_ENDPOINT / S3_ENDPOINT
   forcePathStyle: true, // defaults to true when `endpoint` is set
-  publicUrl: 'https://cdn…', // public bucket or CDN — or BUCKETCODE_PUBLIC_URL / S3_PUBLIC_URL
+  publicUrl: 'https://cdn…', // public bucket or CDN — or S3ND_PUBLIC_URL / S3_PUBLIC_URL
   prefix: 'snapshots', // internal namespace, applied on the way in and out
   maxSize: 5 * 1024 * 1024, // reject bigger writes before any network call
   syncCode: { length: 8 }, // shape of the codes store.codes makes and reads
@@ -25,18 +25,18 @@ createBucket({
 
 ## Options
 
-| Option           | Environment fallback                                    | Notes                                                                                                                      |
-| ---------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `bucket`         | `BUCKETCODE_BUCKET`, `S3_BUCKET`                        | The only required option.                                                                                                  |
-| `region`         | `BUCKETCODE_REGION`, `AWS_REGION`, `AWS_DEFAULT_REGION` | Defaults to `"auto"` when an `endpoint` is set.                                                                            |
-| `credentials`    | —                                                       | Omit for the AWS default provider chain.                                                                                   |
-| `endpoint`       | `BUCKETCODE_ENDPOINT`, `S3_ENDPOINT`                    | For R2, MinIO, Scaleway, Wasabi…                                                                                           |
-| `forcePathStyle` | —                                                       | Defaults to `true` with a custom `endpoint`, `false` otherwise.                                                            |
-| `publicUrl`      | `BUCKETCODE_PUBLIC_URL`, `S3_PUBLIC_URL`                | Must be an absolute URL. Trailing slash optional.                                                                          |
-| `prefix`         | —                                                       | Applied by every method.                                                                                                   |
-| `maxSize`        | —                                                       | In bytes. Enforced before any network call.                                                                                |
-| `syncCode`       | —                                                       | `{ length, alphabet }`. Defaults to eight Crockford base32 characters — see [Configuring codes](/docs/code-configuration). |
-| `client`         | —                                                       | An `S3Client` you built yourself.                                                                                          |
+| Option           | Environment fallback                              | Notes                                                                                                                      |
+| ---------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `bucket`         | `S3ND_BUCKET`, `S3_BUCKET`                        | The only required option.                                                                                                  |
+| `region`         | `S3ND_REGION`, `AWS_REGION`, `AWS_DEFAULT_REGION` | Defaults to `"auto"` when an `endpoint` is set.                                                                            |
+| `credentials`    | —                                                 | Omit for the AWS default provider chain.                                                                                   |
+| `endpoint`       | `S3ND_ENDPOINT`, `S3_ENDPOINT`                    | For R2, MinIO, Scaleway, Wasabi…                                                                                           |
+| `forcePathStyle` | —                                                 | Defaults to `true` with a custom `endpoint`, `false` otherwise.                                                            |
+| `publicUrl`      | `S3ND_PUBLIC_URL`, `S3_PUBLIC_URL`                | Must be an absolute URL. Trailing slash optional.                                                                          |
+| `prefix`         | —                                                 | Applied by every method.                                                                                                   |
+| `maxSize`        | —                                                 | In bytes. Enforced before any network call.                                                                                |
+| `syncCode`       | —                                                 | `{ length, alphabet }`. Defaults to eight Crockford base32 characters — see [Configuring codes](/docs/code-configuration). |
+| `client`         | —                                                 | An `S3Client` you built yourself.                                                                                          |
 
 ## The prefix is a namespace, not part of the key
 
@@ -94,7 +94,7 @@ you nothing:
 ```ts
 const store = createBucket({ bucket: 'my-bucket', maxSize: 4 * 1024 * 1024 })
 
-await store.upload(tooBig) // throws BucketCodeError { code: 'FILE_TOO_LARGE' }
+await store.upload(tooBig) // throws S3ndError { code: 'FILE_TOO_LARGE' }
 ```
 
 Set it below your runtime's own request limit and you get a clean 413 instead of a truncated

@@ -16,8 +16,8 @@ the code into the second, and the database follows.
 
 ```sh
 cp .env.example .env.local
-pnpm install
-pnpm dev
+bun install
+bun run dev
 ```
 
 Then open http://localhost:3200 in two different browsers — two profiles, or one normal window and
@@ -44,7 +44,7 @@ Create the bucket once from the console at http://localhost:9001.
 | `app/api/sync/…` | The two routes. Around forty lines, most of it error mapping.                           |
 
 `lib/db.ts` is deliberately application code. Only your app knows its own object stores, which is
-why bucketcode does not try to dump IndexedDB generically — a generic dumper would be wrong for
+why s3nd does not try to dump IndexedDB generically — a generic dumper would be wrong for
 most schemas and subtly wrong for the rest.
 
 ## Worth noticing

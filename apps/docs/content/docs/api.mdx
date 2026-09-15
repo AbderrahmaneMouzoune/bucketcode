@@ -100,7 +100,7 @@ store.codes.normalize('k7-qp2m4x') // "K7QP2M4X"
 Builds a scheme outside a store. Same object as `store.codes`.
 
 ```ts
-import { createSyncCodes, syncCodeAlphabets } from 'bucketcode'
+import { createSyncCodes, syncCodeAlphabets } from 's3nd'
 
 const codes = createSyncCodes({ length: 4, alphabet: syncCodeAlphabets.digits })
 ```
@@ -250,7 +250,7 @@ Passing an array batches into `DeleteObjects` calls of 1000 keys; if S3 reports 
 
 ## `store.client`
 
-The underlying `S3Client`, created on first access. Use it for anything bucketcode does not cover:
+The underlying `S3Client`, created on first access. Use it for anything s3nd does not cover:
 
 ```ts
 import { ListObjectsV2Command } from '@aws-sdk/client-s3'
@@ -260,10 +260,10 @@ const response = await store.client.send(new ListObjectsV2Command({ Bucket: stor
 
 ## `store.destroy()`
 
-Releases the HTTP sockets of the client bucketcode created. Optional in a long-lived server; useful
+Releases the HTTP sockets of the client s3nd created. Optional in a long-lived server; useful
 in a script that should exit promptly. A client you passed in through `config.client` is left
 alone — it is yours to close.
 
-## `BucketCodeError` and `isBucketCodeError(error)`
+## `S3ndError` and `isS3ndError(error)`
 
 See [Errors](/docs/errors).
