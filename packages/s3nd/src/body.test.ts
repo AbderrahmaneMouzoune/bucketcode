@@ -2,7 +2,7 @@ import { Readable } from 'node:stream'
 
 import { describe, expect, it } from 'vitest'
 
-import { normalizeBody } from '../src/body.js'
+import { normalizeBody } from './body.js'
 import type { S3ndError } from '@s3nd/protocol'
 
 describe('normalizeBody', () => {

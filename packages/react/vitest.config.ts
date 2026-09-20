@@ -4,10 +4,11 @@ export default defineConfig({
   test: {
     // Hooks need a DOM; happy-dom is the cheap one.
     environment: 'happy-dom',
-    include: ['test/**/*.test.tsx'],
+    include: ['src/**/*.test.tsx'],
     coverage: {
       provider: 'v8',
       include: ['src/**'],
+      exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'src/test-helpers.ts'],
       reporter: ['text', 'lcov'],
       thresholds: {
         statements: 88,

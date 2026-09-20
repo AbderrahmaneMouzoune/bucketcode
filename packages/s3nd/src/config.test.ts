@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { resolveConfig } from '../src/config.js'
+import { resolveConfig } from './config.js'
 import type { S3ndError } from '@s3nd/protocol'
-import { clearBucketEnv } from './helpers.js'
+import { clearBucketEnv } from './test-helpers.js'
 
 beforeEach(clearBucketEnv)
 afterEach(() => vi.unstubAllEnvs())

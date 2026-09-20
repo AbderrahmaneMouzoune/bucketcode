@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { createBucket } from '../src/bucket.js'
+import { createBucket } from './bucket.js'
 import { syncCodeAlphabets } from '@s3nd/protocol'
-import { createStubClient } from './helpers.js'
+import { createStubClient } from './test-helpers.js'
 
 describe('store.codes', () => {
   it('follows the scheme configured on the bucket', () => {

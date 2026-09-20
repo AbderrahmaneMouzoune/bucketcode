@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createBucket } from 's3nd'
 import type { S3Client } from '@aws-sdk/client-s3'
 
-import { runChecks, type Check } from '../src/doctor.js'
+import { runChecks, type Check } from './doctor.js'
 
 /**
  * A stand-in shaped to exactly what `doctor` exercises: the three object verbs,

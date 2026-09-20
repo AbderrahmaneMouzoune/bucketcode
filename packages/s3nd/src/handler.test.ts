@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createBucket } from '../src/bucket.js'
-import { createTransferHandler } from '../src/handler.js'
-import { createMemoryClient } from './helpers.js'
+import { createBucket } from './bucket.js'
+import { createTransferHandler } from './handler.js'
+import { createMemoryClient } from './test-helpers.js'
 
 const BASE = 'http://drop.test/api/transfers'
 

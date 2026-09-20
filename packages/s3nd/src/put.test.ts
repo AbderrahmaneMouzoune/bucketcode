@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createBucket } from '../src/bucket.js'
-import { clearBucketEnv, createStubClient, s3Body } from './helpers.js'
+import { createBucket } from './bucket.js'
+import { clearBucketEnv, createStubClient, s3Body } from './test-helpers.js'
 
 beforeEach(clearBucketEnv)
 afterEach(() => vi.unstubAllEnvs())

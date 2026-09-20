@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createSyncCode, createSyncCodes, normalizeSyncCode, syncCodeAlphabets } from '../src/index.js'
+import { createSyncCode, createSyncCodes, normalizeSyncCode, syncCodeAlphabets } from './index.js'
 
 describe('the default scheme', () => {
   it('is eight characters of Crockford base32', () => {

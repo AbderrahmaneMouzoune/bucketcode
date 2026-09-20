@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { useSyncCodeInput } from '../src/index.js'
+import { useSyncCodeInput } from './index.js'
 
 describe('useSyncCodeInput', () => {
   it('starts empty, with nothing to submit', () => {

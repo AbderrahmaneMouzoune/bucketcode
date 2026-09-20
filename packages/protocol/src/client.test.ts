@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createTransferClient, TransferError } from '../src/index.js'
+import { createTransferClient, TransferError } from './index.js'
 
 const BASE = 'http://drop.test/api/transfers'
 

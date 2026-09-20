@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 
 import { TransferError, type CreatedTransfer, type TransferClient, type TransferMetadata } from '@s3nd/protocol'
 
-import { S3ndProvider, useReceiveTransfer, useSendTransfer, useTransferClient } from '../src/index.js'
+import { S3ndProvider, useReceiveTransfer, useSendTransfer, useTransferClient } from './index.js'
 
 function created(code = 'K7QP2M4X', kind: 'snapshot' | 'file' = 'snapshot'): CreatedTransfer {
   return { code, kind, createdAt: '2026-01-01T00:00:00.000Z' }

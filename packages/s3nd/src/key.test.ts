@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { S3ndError } from '@s3nd/protocol'
-import { assertValidKey, encodeKey, generateKey, joinKey, normalizePrefix, sanitizeFilename } from '../src/key.js'
+import { assertValidKey, encodeKey, generateKey, joinKey, normalizePrefix, sanitizeFilename } from './key.js'
 
 describe('assertValidKey', () => {
   it('accepts ordinary keys', () => {
