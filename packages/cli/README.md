@@ -1,5 +1,12 @@
 # @s3nd/cli
 
+[![npm](https://img.shields.io/npm/v/%40s3nd%2Fcli?color=cb3837&logo=npm)](https://www.npmjs.com/package/@s3nd/cli)
+[![CI](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml/badge.svg)](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml)
+[![npm downloads](https://img.shields.io/npm/dm/%40s3nd%2Fcli?color=blue)](https://www.npmjs.com/package/@s3nd/cli)
+[![install size](https://packagephobia.com/badge?p=%40s3nd%2Fcli)](https://packagephobia.com/result?p=%40s3nd%2Fcli)
+[![types](https://img.shields.io/npm/types/%40s3nd%2Fcli)](https://www.npmjs.com/package/@s3nd/cli)
+[![license](https://img.shields.io/npm/l/%40s3nd%2Fcli?color=success)](./LICENSE)
+
 Move a file between machines with a code, and check that a bucket is actually set up to hold
 transfers.
 

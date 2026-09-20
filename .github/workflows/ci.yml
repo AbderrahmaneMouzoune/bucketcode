@@ -65,6 +65,10 @@ jobs:
 
       - run: bun run lint
 
+      # Test-name conventions: no `should`, lowercase `it` titles, `it` over
+      # `test`, no duplicate or focused tests, at most two levels of describe.
+      - run: bun run lint:tests
+
       - run: bun run type-check
 
       - run: bun run build

@@ -1,5 +1,12 @@
 # @s3nd/react
 
+[![npm](https://img.shields.io/npm/v/%40s3nd%2Freact?color=cb3837&logo=npm)](https://www.npmjs.com/package/@s3nd/react)
+[![CI](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml/badge.svg)](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml)
+[![npm downloads](https://img.shields.io/npm/dm/%40s3nd%2Freact?color=blue)](https://www.npmjs.com/package/@s3nd/react)
+[![install size](https://packagephobia.com/badge?p=%40s3nd%2Freact)](https://packagephobia.com/result?p=%40s3nd%2Freact)
+[![types](https://img.shields.io/npm/types/%40s3nd%2Freact)](https://www.npmjs.com/package/@s3nd/react)
+[![license](https://img.shields.io/npm/l/%40s3nd%2Freact?color=success)](./LICENSE)
+
 React hooks for moving a local-first app's data between devices: send a snapshot or a file, read a
 code back, and an input that repairs the code as the user types it.
 

@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest something s3nd should be able to do.
+labels: ['enhancement']
+
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Which package
+      options:
+        - s3nd
+        - '@s3nd/protocol'
+        - '@s3nd/react'
+        - '@s3nd/cli'
+        - A new one
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that s3nd makes hard today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: The API you would want to write, if you have one in mind.
+      render: ts
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do instead today
+      description: The workaround, if there is one.

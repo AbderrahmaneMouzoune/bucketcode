@@ -1,5 +1,12 @@
 # s3nd
 
+[![npm](https://img.shields.io/npm/v/s3nd?color=cb3837&logo=npm)](https://www.npmjs.com/package/s3nd)
+[![CI](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml/badge.svg)](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml)
+[![npm downloads](https://img.shields.io/npm/dm/s3nd?color=blue)](https://www.npmjs.com/package/s3nd)
+[![install size](https://packagephobia.com/badge?p=s3nd)](https://packagephobia.com/result?p=s3nd)
+[![types](https://img.shields.io/npm/types/s3nd)](https://www.npmjs.com/package/s3nd)
+[![license](https://img.shields.io/npm/l/s3nd?color=success)](./LICENSE)
+
 Move a local-first app's data from one device to another, through your own bucket.
 
 ```ts
@@ -125,6 +132,15 @@ Two repository secrets:
 
 Running the workflow by hand with **Publish** ticked publishes the version currently on `main` —
 the way out when a release was tagged but the publish step failed.
+
+## Contributing
+
+[CONTRIBUTING.md](./CONTRIBUTING.md) covers the setup, the test stand-ins for S3, the naming
+conventions the suites follow, and the rules for changing a public API. Everyone taking part agrees
+to the [Code of Conduct](./CODE_OF_CONDUCT.md).
+
+Found a security problem? [SECURITY.md](./SECURITY.md) — report it privately, and read it anyway
+before shipping: it spells out what a sync code does and does not protect.
 
 ## License
 
