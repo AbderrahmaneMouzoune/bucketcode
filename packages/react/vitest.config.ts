@@ -5,5 +5,16 @@ export default defineConfig({
     // Hooks need a DOM; happy-dom is the cheap one.
     environment: 'happy-dom',
     include: ['test/**/*.test.tsx'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**'],
+      reporter: ['text', 'lcov'],
+      thresholds: {
+        statements: 88,
+        branches: 75,
+        functions: 90,
+        lines: 88,
+      },
+    },
   },
 })
