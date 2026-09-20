@@ -1,0 +1,253 @@
+---
+title: 'Without a server'
+description: 'The CLI straight to Cloudflare R2: a bucket, a token, one configuration file, and a code carried between two machines.'
+---
+
+Every transfer needs credentials somewhere. [A server](/docs/server) is where they belong when a
+browser takes part, because a browser cannot keep a secret.
+
+When every participant is a machine you control — your laptop, a desktop, a CI runner, a backup box
+— that reasoning does not apply. The credentials can sit on those machines, the CLI can talk to the
+bucket directly, and there is nothing to deploy, nothing to keep running and nothing to pay for
+between the two ends.
+
+This page walks that setup end to end on Cloudflare R2. Any S3-compatible provider works the same
+way; R2 is the one where the bill for moving a 2 GB file between two laptops is nothing, because
+egress is free.
+
+## The bucket
+
+In the Cloudflare dashboard: **R2 → Create bucket**, named `transfers`. Or, with
+[wrangler](https://developers.cloudflare.com/workers/wrangler/):
+
+```sh
+wrangler r2 bucket create transfers
+```
+
+Leave public access off. Nothing in this setup serves the bucket to the web: every read goes
+through credentials.
+
+## The token
+
+**R2 → API → Manage API tokens → Create API token**, with **Object Read & Write** on this bucket
+and no other. It hands back an access key id and a secret access key, once. You also need the
+account id, which is the first part of the S3 endpoint R2 shows you:
+
+```
+https://<account-id>.r2.cloudflarestorage.com
+```
+
+A token scoped to one bucket, with two verbs, is the whole blast radius of a laptop that gets
+stolen. Scope it that way now rather than after.
+
+## The configuration
+
+```sh
+npm install -g @s3nd/cli
+s3nd init --provider r2 --bucket transfers
+```
+
+That writes `s3nd.config.json`, next to whatever directory you ran it in:
+
+```json title="s3nd.config.json"
+{
+  "bucket": "transfers",
+  "region": "auto",
+  "endpoint": "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+  "prefix": "transfers",
+  "expiresIn": "24h",
+  "envFile": ".env",
+  "credentials": {
+    "accessKeyId": "${R2_ACCESS_KEY_ID}",
+    "secretAccessKey": "${R2_SECRET_ACCESS_KEY}"
+  }
+}
+```
+
+The secrets are references, not values — `${…}` is read from the environment, and `envFile` says
+which file to load first. So the configuration is a file you can commit and the keys are a file you
+cannot:
+
+```sh title=".env"
+R2_ACCOUNT_ID=8c4…
+R2_ACCESS_KEY_ID=b31…
+R2_SECRET_ACCESS_KEY=7f2…
+```
+
+```sh
+echo ".env" >> .gitignore
+```
+
+`region: "auto"` is R2's convention — it ignores the region, and the SDK insists on having one.
+Setting `endpoint` also turns on path-style addressing, which every S3-compatible provider accepts.
+
+## Checking it before trusting it
+
+```sh
+$ s3nd doctor
+Using /home/you/transfers/s3nd.config.json
+✓ Configuration: bucket "transfers", region "auto", endpoint https://8c4….r2.cloudflarestorage.com
+✓ Credentials: resolved, key ends in 1a2b
+✓ Bucket reachable: HeadBucket succeeded
+✓ Write, read, delete: round-tripped a probe object
+! Expiry cleanup: no enabled expiration rule
+  → Add an S3 lifecycle rule that expires objects under "transfers/" after a day or
+    two. Without it, expired transfers stay stored and billed.
+
+1 check(s) failed.
+```
+
+`doctor` does not read your token's policy and reason about it — it performs the operations
+s3nd needs and reports what happened, then deletes the probe object.
+
+That last check is the one worth acting on. `expiresIn` stops a transfer being _handed over_ after
+a day; only a lifecycle rule deletes the object. In the dashboard: **your bucket → Settings →
+Object lifecycle rules**, expiring objects with the prefix `transfers/` after two days. Run
+`s3nd doctor` again and it turns green.
+
+<Callout>
+  On a token scoped to objects rather than the whole bucket, the lifecycle check can come back as `could not be read`.
+  That is a permission on the check, not a fault in the bucket — verify the rule once in the dashboard and move on.
+</Callout>
+
+## Moving something
+
+On the machine that has the file:
+
+```sh
+$ s3nd put ./contract.pdf
+contract.pdf · 284 kB · expires in 1 day
+K7QP2M4X
+```
+
+The code is on stdout and everything else on stderr, so it composes:
+
+```sh
+CODE=$(s3nd put ./contract.pdf)
+```
+
+On the other machine, with the same configuration and the same `.env`:
+
+```sh
+$ s3nd get K7QP2M4X
+Wrote /home/you/contract.pdf · 284 kB
+
+$ s3nd rm K7QP2M4X
+Burned K7QP2M4X
+```
+
+`get` writes to the stored filename unless you pass `-o`, and `-o -` sends the bytes to stdout.
+Codes fold case and ignore dashes, so `k7qp-2m4x` typed off a phone screen finds the same object.
+
+Nothing was streamed through a server in either direction. The bytes went from the laptop to R2
+and from R2 to the other machine.
+
+## The second machine
+
+Three ways to give it the same answers, in increasing order of how much you trust it:
+
+**Copy the two files.** `s3nd.config.json` and `.env` into any directory; the CLI finds the
+config by walking up from where it runs.
+
+**Make it machine-wide.** Put the same configuration at `~/.config/s3nd/config.json` — it is the
+fallback when no project file is found, so `s3nd put` works from anywhere on that machine. Point
+`envFile` at an absolute path, since the relative one resolves against the config file.
+
+**Environment only.** No file at all:
+
+```sh
+export S3ND_BUCKET=transfers
+export S3ND_ENDPOINT=https://8c4….r2.cloudflarestorage.com
+export S3ND_REGION=auto
+export AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=…
+
+s3nd put ./contract.pdf
+```
+
+This is the shape CI wants — secrets from the runner's store, no file to check in:
+
+```yaml title=".github/workflows/nightly.yml"
+- run: tar cz ./data | npx @s3nd/cli put - --name backup.tar.gz --expires-in never
+  env:
+    S3ND_BUCKET: transfers
+    S3ND_PREFIX: backups
+    S3ND_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+    S3ND_REGION: auto
+    AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+    AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+```
+
+Note the two changes that make it a backup rather than a handover: `--expires-in never`, and a
+prefix of its own so the lifecycle rule on `transfers/` cannot reach it.
+
+When a machine behaves unexpectedly, `s3nd config` says which of these won:
+
+```sh
+$ s3nd config
+file         /home/you/transfers/s3nd.config.json
+mode         straight to S3
+
+bucket       transfers                                 $S3ND_BUCKET
+region       auto                                      s3nd.config.json
+endpoint     https://8c4….r2.cloudflarestorage.com     s3nd.config.json
+prefix       backups                                   --prefix
+credentials  …1a2b                                     s3nd.config.json
+expires in   never                                     --expires-in
+```
+
+## Two machines, two buckets
+
+One file, one profile each:
+
+```json title="s3nd.config.json"
+{
+  "envFile": ".env",
+  "profiles": {
+    "r2": {
+      "bucket": "transfers",
+      "region": "auto",
+      "endpoint": "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+      "credentials": { "accessKeyId": "${R2_ACCESS_KEY_ID}", "secretAccessKey": "${R2_SECRET_ACCESS_KEY}" }
+    },
+    "local": {
+      "bucket": "transfers",
+      "endpoint": "http://localhost:9000",
+      "credentials": { "accessKeyId": "minioadmin", "secretAccessKey": "minioadmin" }
+    }
+  }
+}
+```
+
+```sh
+s3nd -p local doctor       # against a MinIO container, offline
+s3nd -p r2 put ./contract.pdf
+```
+
+`export S3ND_PROFILE=r2` picks one for a whole shell.
+
+## What you are trading away
+
+Being honest about the shape of this, because it is the same trade every time:
+
+- **A browser cannot take part.** Not "should not" — the moment an end user's browser needs to
+  send or receive a transfer, the credentials would have to reach it. That is the case for
+  [a server](/docs/server), and there is no version of this page that avoids it.
+- **Every machine holds the keys.** Revoking one machine means rotating the R2 token and
+  redistributing it to the others. Two or three machines you own, fine; a team of twenty, not fine.
+- **There is no per-user authorization.** The token is the only boundary. Anyone who can read
+  `.env` can read and delete every transfer in that bucket.
+- **The code is the only secret on a transfer.** Forty bits, and expiring within a day, which is
+  sound for machine-to-machine use. Long-lived codes for sensitive payloads deserve
+  [client-side encryption](/docs/use-cases/encrypted-sync) on top.
+- **Claiming a code is a conditional write.** R2 implements `If-None-Match` on `PutObject`, which
+  is what keeps two simultaneous `put`s from overwriting each other. Point the CLI at an
+  S3-compatible gateway that does not, and the first `s3nd put` is where you will find out.
+
+Nothing here is a reason not to start this way. It is a reason to know which of those lines will
+be the one that makes you add a server later.
+
+## Where this goes next
+
+- [Setting up a server](/docs/server) — the same bucket, with an app in front of it.
+- [The CLI reference](/docs/cli) — every command, the configuration file, the precedence rules.
+- [S3-compatible providers](/docs/providers) — MinIO, Scaleway, Wasabi, and what changes.
