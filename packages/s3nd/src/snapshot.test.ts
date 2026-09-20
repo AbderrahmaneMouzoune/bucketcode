@@ -2,9 +2,9 @@ import { gunzipSync } from 'node:zlib'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createBucket } from '../src/bucket.js'
+import { createBucket } from './bucket.js'
 import type { S3ndError } from '@s3nd/protocol'
-import { clearBucketEnv, createMemoryClient, createStubClient } from './helpers.js'
+import { clearBucketEnv, createMemoryClient, createStubClient } from './test-helpers.js'
 
 beforeEach(clearBucketEnv)
 afterEach(() => {
@@ -21,8 +21,8 @@ const STATE = {
   settings: { theme: 'dark' },
 }
 
-describe('putSnapshot', () => {
-  it('stores a gzipped, self-describing envelope', async () => {
+describe('Bucket.putSnapshot', () => {
+  it('stores a gzipped envelope carrying the app, version, device and createdAt', async () => {
     const { client, calls } = createStubClient({ ETag: '"abc"' })
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -45,7 +45,7 @@ describe('putSnapshot', () => {
     expect(envelope.expiresAt).toBeUndefined()
   })
 
-  it('compresses well enough to matter', async () => {
+  it('stores a repetitive state smaller than its raw JSON', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -62,7 +62,7 @@ describe('putSnapshot', () => {
     expect(calls[0]!.command.input.Body.byteLength).toBeLessThan(raw / 5)
   })
 
-  it('can skip compression', async () => {
+  it('stores plain JSON when compress is false', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -73,7 +73,7 @@ describe('putSnapshot', () => {
     expect(JSON.parse(Buffer.from(calls[0]!.command.input.Body).toString('utf8')).data).toEqual(STATE)
   })
 
-  it('stamps an expiry when asked', async () => {
+  it('stamps expiresAt when expiresIn is given', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-27T12:00:00Z'))
 
@@ -87,7 +87,7 @@ describe('putSnapshot', () => {
     expect(envelope.expiresAt).toBe('2026-08-27T13:00:00.000Z')
   })
 
-  it('rejects data JSON cannot represent', async () => {
+  it('throws INVALID_SNAPSHOT when the data is not JSON-serializable', async () => {
     const { client, send } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -98,7 +98,7 @@ describe('putSnapshot', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('rejects a non-positive expiry', async () => {
+  it('throws INVALID_SNAPSHOT when expiresIn is not positive', async () => {
     const { client } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -106,10 +106,48 @@ describe('putSnapshot', () => {
       code: 'INVALID_SNAPSHOT',
     })
   })
+
+  it('throws PRECONDITION_FAILED when ifMatch no longer matches the stored etag', async () => {
+    const { client } = createMemoryClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    const first = await bucket.putSnapshot('XK5892', { notes: ['a'] })
+
+    // Another device writes in the meantime.
+    await bucket.putSnapshot('XK5892', { notes: ['a', 'b'] })
+
+    const error = (await bucket
+      .putSnapshot('XK5892', { notes: ['a', 'c'] }, { ifMatch: first.etag })
+      .catch((e) => e)) as S3ndError
+
+    expect(error.code).toBe('PRECONDITION_FAILED')
+    expect(await bucket.getSnapshot('XK5892')).toMatchObject({ data: { notes: ['a', 'b'] } })
+  })
+
+  it('writes when ifMatch still matches the stored etag', async () => {
+    const { client } = createMemoryClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    const first = await bucket.putSnapshot('XK5892', { notes: ['a'] })
+    await bucket.putSnapshot('XK5892', { notes: ['a', 'b'] }, { ifMatch: first.etag })
+
+    expect(await bucket.getSnapshot('XK5892')).toMatchObject({ data: { notes: ['a', 'b'] } })
+  })
+
+  it('throws PRECONDITION_FAILED when ifAbsent is set and the key is taken', async () => {
+    const { client } = createMemoryClient()
+    const bucket = createBucket({ bucket: 'assets', client })
+
+    await bucket.putSnapshot('XK5892', STATE, { ifAbsent: true })
+
+    await expect(bucket.putSnapshot('XK5892', STATE, { ifAbsent: true })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    })
+  })
 })
 
-describe('getSnapshot', () => {
-  it('round-trips the state, with everything that described it', async () => {
+describe('Bucket.getSnapshot', () => {
+  it('returns the state with the app, version, device and createdAt it was written with', async () => {
     const { client } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', prefix: 'snapshots', client })
 
@@ -122,7 +160,7 @@ describe('getSnapshot', () => {
     expect(read?.etag).toBe(written.etag)
   })
 
-  it('reads an uncompressed snapshot too', async () => {
+  it('reads a snapshot back when it was stored uncompressed', async () => {
     const { client } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -131,7 +169,7 @@ describe('getSnapshot', () => {
     expect((await bucket.getSnapshot('XK5892'))?.data).toEqual(STATE)
   })
 
-  it('still reads a snapshot written before the package was renamed', async () => {
+  it('reads a snapshot back when its envelope carries the pre-rename marker', async () => {
     const { client, objects } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -157,7 +195,7 @@ describe('getSnapshot', () => {
     expect(read).toMatchObject({ app: 'notes', version: 3, device: 'Pixel 8' })
   })
 
-  it('rejects an object carrying no marker at all', async () => {
+  it('throws INVALID_SNAPSHOT when the envelope carries no marker', async () => {
     const { client, objects } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -171,14 +209,14 @@ describe('getSnapshot', () => {
     await expect(bucket.getSnapshot('XK5892')).rejects.toMatchObject({ code: 'INVALID_SNAPSHOT' })
   })
 
-  it('returns null when there is nothing stored', async () => {
+  it('returns null when nothing is stored under the key', async () => {
     const { client } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
     expect(await bucket.getSnapshot('XK5892')).toBeNull()
   })
 
-  it('treats an expired snapshot as gone', async () => {
+  it('returns null when the snapshot has passed its expiresAt', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-27T12:00:00Z'))
 
@@ -194,7 +232,7 @@ describe('getSnapshot', () => {
     expect(await bucket.getSnapshot('XK5892')).toBeNull()
   })
 
-  it('refuses a snapshot written by a newer build', async () => {
+  it('throws SNAPSHOT_TOO_NEW when the schema version exceeds maxVersion', async () => {
     const { client } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -206,7 +244,7 @@ describe('getSnapshot', () => {
     expect(await bucket.getSnapshot('XK5892', { maxVersion: 5 })).not.toBeNull()
   })
 
-  it('rejects an object that is not a snapshot', async () => {
+  it('throws INVALID_SNAPSHOT when the object is not an s3nd envelope', async () => {
     const { client } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -216,7 +254,7 @@ describe('getSnapshot', () => {
     expect(error.code).toBe('INVALID_SNAPSHOT')
   })
 
-  it('rejects an envelope from a future format', async () => {
+  it('throws INVALID_SNAPSHOT when the envelope format is newer than this build', async () => {
     const { client } = createMemoryClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -225,45 +263,5 @@ describe('getSnapshot', () => {
     })
 
     await expect(bucket.getSnapshot('XK5892')).rejects.toThrowError(/Upgrade the package/)
-  })
-})
-
-describe('concurrent devices', () => {
-  it('refuses to overwrite a snapshot that moved under you', async () => {
-    const { client } = createMemoryClient()
-    const bucket = createBucket({ bucket: 'assets', client })
-
-    const first = await bucket.putSnapshot('XK5892', { notes: ['a'] })
-
-    // Another device writes in the meantime.
-    await bucket.putSnapshot('XK5892', { notes: ['a', 'b'] })
-
-    const error = (await bucket
-      .putSnapshot('XK5892', { notes: ['a', 'c'] }, { ifMatch: first.etag })
-      .catch((e) => e)) as S3ndError
-
-    expect(error.code).toBe('PRECONDITION_FAILED')
-    expect(await bucket.getSnapshot('XK5892')).toMatchObject({ data: { notes: ['a', 'b'] } })
-  })
-
-  it('accepts a write when the ETag still matches', async () => {
-    const { client } = createMemoryClient()
-    const bucket = createBucket({ bucket: 'assets', client })
-
-    const first = await bucket.putSnapshot('XK5892', { notes: ['a'] })
-    await bucket.putSnapshot('XK5892', { notes: ['a', 'b'] }, { ifMatch: first.etag })
-
-    expect(await bucket.getSnapshot('XK5892')).toMatchObject({ data: { notes: ['a', 'b'] } })
-  })
-
-  it('claims a code only if nobody else did', async () => {
-    const { client } = createMemoryClient()
-    const bucket = createBucket({ bucket: 'assets', client })
-
-    await bucket.putSnapshot('XK5892', STATE, { ifAbsent: true })
-
-    await expect(bucket.putSnapshot('XK5892', STATE, { ifAbsent: true })).rejects.toMatchObject({
-      code: 'PRECONDITION_FAILED',
-    })
   })
 })

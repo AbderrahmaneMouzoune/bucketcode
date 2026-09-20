@@ -20,5 +20,5 @@
     "isolatedModules": true,
     "types": ["node"]
   },
-  "include": ["src", "test", "tsup.config.ts", "vitest.config.ts"]
+  "include": ["src", "tsup.config.ts", "vitest.config.ts"]
 }

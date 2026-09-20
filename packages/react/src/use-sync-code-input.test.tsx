@@ -1,10 +1,10 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { useSyncCodeInput } from '../src/index.js'
+import { useSyncCodeInput } from './index.js'
 
 describe('useSyncCodeInput', () => {
-  it('starts empty, with nothing to submit', () => {
+  it('starts empty and reports itself incomplete', () => {
     const { result } = renderHook(() => useSyncCodeInput())
 
     expect(result.current.value).toBe('')
@@ -13,7 +13,7 @@ describe('useSyncCodeInput', () => {
     expect(result.current.error).toBeNull()
   })
 
-  it('keeps what the user typed and normalizes alongside it', () => {
+  it('keeps the raw input and exposes the normalized code alongside it', () => {
     const { result } = renderHook(() => useSyncCodeInput())
 
     act(() => result.current.setValue('k7-qp2m4x'))
@@ -24,7 +24,7 @@ describe('useSyncCodeInput', () => {
     expect(result.current.isComplete).toBe(true)
   })
 
-  it('repairs the characters people misread', () => {
+  it('folds the confusable characters the alphabet makes unambiguous', () => {
     const { result } = renderHook(() => useSyncCodeInput())
 
     act(() => result.current.setValue('OIL5ABCD'))
@@ -32,7 +32,7 @@ describe('useSyncCodeInput', () => {
     expect(result.current.code).toBe('0115ABCD')
   })
 
-  it('is incomplete until the code is the full length', () => {
+  it('reports incomplete until the code reaches the configured length', () => {
     const { result } = renderHook(() => useSyncCodeInput())
 
     act(() => result.current.setValue('K7QP'))
@@ -41,7 +41,7 @@ describe('useSyncCodeInput', () => {
     expect(result.current.isComplete).toBe(false)
   })
 
-  it('reports a character the alphabet cannot hold, without throwing', () => {
+  it('reports an error rather than throwing when a character is outside the alphabet', () => {
     const { result } = renderHook(() => useSyncCodeInput())
 
     act(() => result.current.setValue('K7QP2M4!'))
@@ -50,7 +50,7 @@ describe('useSyncCodeInput', () => {
     expect(result.current.error).toContain('!')
   })
 
-  it('follows a configured scheme', () => {
+  it('follows the alphabet and length it is configured with', () => {
     const { result } = renderHook(() => useSyncCodeInput({ length: 4, alphabet: '0123456789' }))
 
     act(() => result.current.setValue('81 43'))
@@ -60,14 +60,14 @@ describe('useSyncCodeInput', () => {
     expect(result.current.inputProps.inputMode).toBe('numeric')
   })
 
-  it('asks for a text keyboard when the alphabet has letters', () => {
+  it('asks for a text keyboard when the alphabet contains letters', () => {
     const { result } = renderHook(() => useSyncCodeInput())
 
     expect(result.current.inputProps.inputMode).toBe('text')
     expect(result.current.inputProps.autoComplete).toBe('one-time-code')
   })
 
-  it('clears on reset', () => {
+  it('clears the input on reset', () => {
     const { result } = renderHook(() => useSyncCodeInput())
 
     act(() => result.current.setValue('K7QP2M4X'))
@@ -77,7 +77,7 @@ describe('useSyncCodeInput', () => {
     expect(result.current.code).toBeNull()
   })
 
-  it('drives an input through inputProps', () => {
+  it('exposes inputProps that drive a controlled input', () => {
     const { result } = renderHook(() => useSyncCodeInput())
 
     act(() => {

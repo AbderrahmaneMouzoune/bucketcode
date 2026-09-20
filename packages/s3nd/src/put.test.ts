@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createBucket } from '../src/bucket.js'
-import { clearBucketEnv, createStubClient, s3Body } from './helpers.js'
+import { createBucket } from './bucket.js'
+import { clearBucketEnv, createStubClient, s3Body } from './test-helpers.js'
 
 beforeEach(clearBucketEnv)
 afterEach(() => vi.unstubAllEnvs())
 
 /** The whole point of put/get: one identifier, one file. */
-describe('one file per identifier', () => {
-  it('stores the file at the identifier', async () => {
+describe('Bucket.put', () => {
+  it('stores the body under the identifier as the object key', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -18,7 +18,7 @@ describe('one file per identifier', () => {
     expect(result.key).toBe('XK5892')
   })
 
-  it('replaces the file on the second put, same identifier', async () => {
+  it('replaces the stored object when the same identifier is written twice', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -30,7 +30,7 @@ describe('one file per identifier', () => {
     expect(calls[1]!.command.input.Metadata).toEqual({ filename: 'final.pdf' })
   })
 
-  it('round-trips the identifier through get, getUrl and delete under a prefix', async () => {
+  it('round-trips the identifier through get, getUrl and delete while the prefix stays internal', async () => {
     const { client, calls } = createStubClient({ Body: s3Body('v1'), ContentType: 'application/pdf' })
     const bucket = createBucket({ bucket: 'assets', prefix: 'files', publicUrl: 'https://cdn.example.com', client })
 
@@ -47,7 +47,7 @@ describe('one file per identifier', () => {
     expect(calls.map((call) => call.command.input.Key)).toEqual(['files/XK5892', 'files/XK5892', 'files/XK5892'])
   })
 
-  it('forwards upload options', async () => {
+  it('forwards the upload options it is given', async () => {
     const { client, calls } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 
@@ -64,7 +64,7 @@ describe('one file per identifier', () => {
     })
   })
 
-  it('enforces maxSize like upload does', async () => {
+  it('throws FILE_TOO_LARGE when the body exceeds maxSize', async () => {
     const { client, send } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', maxSize: 4, client })
 
@@ -72,7 +72,7 @@ describe('one file per identifier', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('rejects an identifier that is not a usable key', async () => {
+  it('throws INVALID_KEY when the identifier is not a usable object key', async () => {
     const { client, send } = createStubClient()
     const bucket = createBucket({ bucket: 'assets', client })
 

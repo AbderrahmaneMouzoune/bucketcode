@@ -29,9 +29,14 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./package.json": "./package.json"
   },
@@ -43,13 +48,16 @@
   ],
   "sideEffects": false,
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
+    "check:exports": "publint --strict && attw --pack .",
     "type-check": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
@@ -61,10 +69,13 @@
     "react": ">=18"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "@vitest/coverage-v8": "^4.1.11",
     "happy-dom": "^20.0.0",
+    "publint": "^0.3.14",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tsup": "^8.5.1",

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { createBucket } from '../src/bucket.js'
-import { createTransferHandler } from '../src/handler.js'
+import { createBucket } from './bucket.js'
+import { createTransferHandler } from './handler.js'
 import { createTransferClient, isTransferError } from '@s3nd/protocol'
-import { createMemoryClient } from './helpers.js'
+import { createMemoryClient } from './test-helpers.js'
 
 const BASE = 'http://drop.test/api/transfers'
 
@@ -23,8 +23,8 @@ function wired() {
   })
 }
 
-describe('createTransferClient — against a real handler', () => {
-  it('round-trips a snapshot', async () => {
+describe('createTransferClient', () => {
+  it('round-trips a snapshot through a live handler', async () => {
     const client = wired()
 
     const created = await client.createSnapshot({ data: { notes: ['one'] }, version: 2, device: 'Pixel 8' })
@@ -34,7 +34,7 @@ describe('createTransferClient — against a real handler', () => {
     expect(read).toMatchObject({ kind: 'snapshot', version: 2, device: 'Pixel 8', data: { notes: ['one'] } })
   })
 
-  it('round-trips a file', async () => {
+  it('round-trips a file through a live handler', async () => {
     const client = wired()
     const bytes = new TextEncoder().encode('hello bucket')
 
@@ -45,14 +45,14 @@ describe('createTransferClient — against a real handler', () => {
     expect((await client.read(created.code))?.filename).toBe('hello.txt')
   })
 
-  it('returns null rather than throwing on an unknown code', async () => {
+  it('returns null rather than throwing when the code is unknown', async () => {
     const client = wired()
 
     expect(await client.read('K7QP2M4X')).toBeNull()
     expect(await client.readBytes('K7QP2M4X')).toBeNull()
   })
 
-  it('burns a code, and tolerates burning it twice', async () => {
+  it('deletes a transfer and tolerates a second delete of the same code', async () => {
     const client = wired()
 
     const { code } = await client.createSnapshot({ data: 1 })
@@ -62,7 +62,7 @@ describe('createTransferClient — against a real handler', () => {
     expect(await client.read(code)).toBeNull()
   })
 
-  it('throws a typed error the caller can branch on', async () => {
+  it('throws a TransferError the caller can branch on', async () => {
     const client = wired()
 
     await expect(client.read('not-a-code!')).rejects.toSatisfy(

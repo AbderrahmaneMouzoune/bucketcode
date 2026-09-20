@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createBucket } from 's3nd'
 import type { S3Client } from '@aws-sdk/client-s3'
 
-import { runChecks, type Check } from '../src/doctor.js'
+import { runChecks, type Check } from './doctor.js'
 
 /**
  * A stand-in shaped to exactly what `doctor` exercises: the three object verbs,
@@ -87,7 +87,7 @@ function find(checks: Check[], name: string): Check {
 }
 
 describe('runChecks', () => {
-  it('reports a healthy bucket', async () => {
+  it('reports every check passing on a healthy bucket', async () => {
     const memory = createDoctorClient()
     memory.setLifecycle([{ Status: 'Enabled', Expiration: { Days: 2 }, Filter: { Prefix: '' } }])
 
@@ -98,7 +98,7 @@ describe('runChecks', () => {
     expect(find(checks, 'Expiry cleanup').detail).toContain('2 day')
   })
 
-  it('never prints the whole access key', async () => {
+  it('redacts all but the last characters of the access key', async () => {
     const memory = createDoctorClient()
     const checks = await runChecks(createBucket({ bucket: 'transfers', client: memory.client }))
 
@@ -107,14 +107,14 @@ describe('runChecks', () => {
     expect(detail).not.toContain('AKIAEXAMPLE')
   })
 
-  it('leaves no probe object behind', async () => {
+  it('deletes the probe object it wrote', async () => {
     const memory = createDoctorClient()
     await runChecks(createBucket({ bucket: 'transfers', client: memory.client }))
 
     expect(memory.objects.size).toBe(0)
   })
 
-  it('warns when nothing will ever delete an expired transfer', async () => {
+  it('warns when no lifecycle rule will ever delete an expired transfer', async () => {
     const memory = createDoctorClient()
     // setLifecycle was never called: the bucket has no configuration at all.
     const checks = await runChecks(createBucket({ bucket: 'transfers', client: memory.client }))
@@ -124,7 +124,7 @@ describe('runChecks', () => {
     expect(lifecycle.fix).toContain('lifecycle rule')
   })
 
-  it('warns when the rules exist but miss the prefix in use', async () => {
+  it('warns when the lifecycle rules miss the prefix in use', async () => {
     const memory = createDoctorClient()
     memory.setLifecycle([{ Status: 'Enabled', Expiration: { Days: 1 }, Filter: { Prefix: 'somewhere-else/' } }])
 
@@ -136,7 +136,7 @@ describe('runChecks', () => {
     expect(find(checks, 'Expiry cleanup').status).toBe('warn')
   })
 
-  it('accepts a rule whose prefix covers the one in use', async () => {
+  it('passes when a lifecycle rule prefix covers the one in use', async () => {
     const memory = createDoctorClient()
     memory.setLifecycle([{ Status: 'Enabled', Expiration: { Days: 1 }, Filter: { Prefix: 'snap' } }])
 
@@ -148,7 +148,7 @@ describe('runChecks', () => {
     expect(find(checks, 'Expiry cleanup').status).toBe('ok')
   })
 
-  it('ignores a disabled rule', async () => {
+  it('ignores a lifecycle rule that is disabled', async () => {
     const memory = createDoctorClient()
     memory.setLifecycle([{ Status: 'Disabled', Expiration: { Days: 1 }, Filter: { Prefix: '' } }])
 
@@ -157,7 +157,7 @@ describe('runChecks', () => {
     expect(find(checks, 'Expiry cleanup').status).toBe('warn')
   })
 
-  it('stops at the first blocking failure instead of cascading', async () => {
+  it('stops at the first blocking failure rather than cascading', async () => {
     const client = { send: async () => ({}), destroy: () => {} } as never
     const checks = await runChecks(createBucket({ bucket: 'transfers', client }))
 

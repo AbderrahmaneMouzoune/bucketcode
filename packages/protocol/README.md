@@ -1,5 +1,12 @@
 # @s3nd/protocol
 
+[![npm](https://img.shields.io/npm/v/%40s3nd%2Fprotocol?color=cb3837&logo=npm)](https://www.npmjs.com/package/@s3nd/protocol)
+[![CI](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml/badge.svg)](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml)
+[![npm downloads](https://img.shields.io/npm/dm/%40s3nd%2Fprotocol?color=blue)](https://www.npmjs.com/package/@s3nd/protocol)
+[![install size](https://packagephobia.com/badge?p=%40s3nd%2Fprotocol)](https://packagephobia.com/result?p=%40s3nd%2Fprotocol)
+[![types](https://img.shields.io/npm/types/%40s3nd%2Fprotocol)](https://www.npmjs.com/package/@s3nd/protocol)
+[![license](https://img.shields.io/npm/l/%40s3nd%2Fprotocol?color=success)](./LICENSE)
+
 The shared vocabulary of every s3nd piece: the wire contract between a server and its
 clients, a client that speaks it, and the sync codes that travel over it.
 

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 
 import { TransferError, type CreatedTransfer, type TransferClient, type TransferMetadata } from '@s3nd/protocol'
 
-import { S3ndProvider, useReceiveTransfer, useSendTransfer, useTransferClient } from '../src/index.js'
+import { S3ndProvider, useReceiveTransfer, useSendTransfer, useTransferClient } from './index.js'
 
 function created(code = 'K7QP2M4X', kind: 'snapshot' | 'file' = 'snapshot'): CreatedTransfer {
   return { code, kind, createdAt: '2026-01-01T00:00:00.000Z' }
@@ -30,7 +30,7 @@ function wrap(client: TransferClient) {
 }
 
 describe('useTransferClient', () => {
-  it('says what is missing when there is no provider', () => {
+  it('throws naming the missing provider when used outside one', () => {
     // React logs the thrown error; the assertion is what matters.
     const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
 
@@ -39,7 +39,7 @@ describe('useTransferClient', () => {
     quiet.mockRestore()
   })
 
-  it('hands back the client the provider was given', () => {
+  it('returns the client the provider was given', () => {
     const client = fakeClient()
     const { result } = renderHook(() => useTransferClient(), { wrapper: wrap(client) })
 
@@ -48,7 +48,7 @@ describe('useTransferClient', () => {
 })
 
 describe('useSendTransfer', () => {
-  it('sends state and exposes the code', async () => {
+  it('sends the state and exposes the returned code', async () => {
     const client = fakeClient()
     const { result } = renderHook(() => useSendTransfer(), { wrapper: wrap(client) })
 
@@ -65,7 +65,7 @@ describe('useSendTransfer', () => {
     )
   })
 
-  it('takes a File and keeps its name and type', async () => {
+  it('sends a File keeping its name and content type', async () => {
     const client = fakeClient()
     const { result } = renderHook(() => useSendTransfer(), { wrapper: wrap(client) })
 
@@ -80,7 +80,7 @@ describe('useSendTransfer', () => {
     expect(result.current.transfer?.kind).toBe('file')
   })
 
-  it('names a Blob, which has no name of its own', async () => {
+  it('gives a Blob a default name, since it carries none', async () => {
     const client = fakeClient()
     const { result } = renderHook(() => useSendTransfer(), { wrapper: wrap(client) })
 
@@ -91,7 +91,7 @@ describe('useSendTransfer', () => {
     expect(client.createFile).toHaveBeenCalledWith(expect.objectContaining({ filename: 'chosen.txt' }))
   })
 
-  it('surfaces a failure as state rather than a rejection', async () => {
+  it('reports a failure as state rather than rejecting', async () => {
     const client = fakeClient({
       createSnapshot: vi.fn(async () => {
         throw new TransferError('TOO_LARGE', 'That database is too large.', { status: 413 })
@@ -110,7 +110,7 @@ describe('useSendTransfer', () => {
     expect((result.current.error as TransferError).code).toBe('TOO_LARGE')
   })
 
-  it('goes back to idle on reset', async () => {
+  it('returns to idle on reset', async () => {
     const client = fakeClient()
     const { result } = renderHook(() => useSendTransfer(), { wrapper: wrap(client) })
 
@@ -123,7 +123,7 @@ describe('useSendTransfer', () => {
     expect(result.current.transfer).toBeNull()
   })
 
-  it('lets the newest send win, whatever order the replies arrive in', async () => {
+  it('keeps the newest send whatever order the replies arrive in', async () => {
     const resolvers: ((value: CreatedTransfer) => void)[] = []
     const client = fakeClient({
       createSnapshot: vi.fn(
@@ -151,7 +151,7 @@ describe('useSendTransfer', () => {
 })
 
 describe('useReceiveTransfer', () => {
-  it('loads a snapshot and types its data', async () => {
+  it('loads a snapshot and exposes its data', async () => {
     const client = fakeClient({
       read: vi.fn(async () => metadata({ data: { notes: ['one'] }, device: 'Pixel 8', version: 3 })),
     })
@@ -166,7 +166,7 @@ describe('useReceiveTransfer', () => {
     expect(result.current.notFound).toBe(false)
   })
 
-  it('reports an unknown code as a fact, not a failure', async () => {
+  it('reports an unknown code as notFound rather than an error', async () => {
     const client = fakeClient({ read: vi.fn(async () => null) })
     const { result } = renderHook(() => useReceiveTransfer(), { wrapper: wrap(client) })
 
@@ -179,7 +179,7 @@ describe('useReceiveTransfer', () => {
     expect(result.current.error).toBeNull()
   })
 
-  it('does not claim not-found when the request itself failed', async () => {
+  it('reports an error rather than notFound when the request itself failed', async () => {
     const client = fakeClient({
       read: vi.fn(async () => {
         throw new TransferError('INTERNAL', 'The server answered 500.', { status: 500 })
@@ -195,7 +195,7 @@ describe('useReceiveTransfer', () => {
     expect(result.current.notFound).toBe(false)
   })
 
-  it('clears not-found when a later load succeeds', async () => {
+  it('clears notFound once a later load succeeds', async () => {
     const read = vi.fn<TransferClient['read']>()
     read.mockResolvedValueOnce(null).mockResolvedValueOnce(metadata())
     const { result } = renderHook(() => useReceiveTransfer(), { wrapper: wrap(fakeClient({ read })) })
@@ -211,7 +211,7 @@ describe('useReceiveTransfer', () => {
     expect(result.current.notFound).toBe(false)
   })
 
-  it('fetches the bytes behind a file', async () => {
+  it('fetches the bytes behind a file transfer', async () => {
     const client = fakeClient()
     const { result } = renderHook(() => useReceiveTransfer(), { wrapper: wrap(client) })
 
@@ -223,7 +223,7 @@ describe('useReceiveTransfer', () => {
     expect(bytes).toEqual(new Uint8Array([1, 2, 3]))
   })
 
-  it('burns a code', async () => {
+  it('deletes a transfer by its code', async () => {
     const client = fakeClient()
     const { result } = renderHook(() => useReceiveTransfer(), { wrapper: wrap(client) })
 

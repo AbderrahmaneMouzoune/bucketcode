@@ -1,5 +1,12 @@
 # s3nd
 
+[![npm](https://img.shields.io/npm/v/s3nd?color=cb3837&logo=npm)](https://www.npmjs.com/package/s3nd)
+[![CI](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml/badge.svg)](https://github.com/AbderrahmaneMouzoune/bucketcode/actions/workflows/ci.yml)
+[![npm downloads](https://img.shields.io/npm/dm/s3nd?color=blue)](https://www.npmjs.com/package/s3nd)
+[![install size](https://packagephobia.com/badge?p=s3nd)](https://packagephobia.com/result?p=s3nd)
+[![types](https://img.shields.io/npm/types/s3nd)](https://www.npmjs.com/package/s3nd)
+[![license](https://img.shields.io/npm/l/s3nd?color=success)](./LICENSE)
+
 Move a local-first app's data from one device to another, through your own bucket.
 
 ```ts

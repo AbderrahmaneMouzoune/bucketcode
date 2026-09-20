@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Question or usage help
+    url: https://github.com/AbderrahmaneMouzoune/bucketcode/discussions
+    about: For "how do I…" — issues are for bugs and feature requests.
+  - name: Security vulnerability
+    url: https://github.com/AbderrahmaneMouzoune/bucketcode/security/advisories/new
+    about: Report it privately. Please do not open a public issue.

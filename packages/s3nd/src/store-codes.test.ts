@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { createBucket } from '../src/bucket.js'
+import { createBucket } from './bucket.js'
 import { syncCodeAlphabets } from '@s3nd/protocol'
-import { createStubClient } from './helpers.js'
+import { createStubClient } from './test-helpers.js'
 
-describe('store.codes', () => {
-  it('follows the scheme configured on the bucket', () => {
+describe('Bucket.codes', () => {
+  it('creates and normalizes codes in the scheme configured on the bucket', () => {
     const { client } = createStubClient()
     const store = createBucket({
       bucket: 'assets',
@@ -18,7 +18,7 @@ describe('store.codes', () => {
     expect(store.codes.length).toBe(4)
   })
 
-  it('defaults to the Crockford scheme', () => {
+  it('defaults to eight Crockford base32 characters', () => {
     const { client } = createStubClient()
     const store = createBucket({ bucket: 'assets', client })
 
