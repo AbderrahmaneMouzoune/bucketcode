@@ -32,8 +32,8 @@ function postFile(bytes: Uint8Array, filename: string, contentType = 'applicatio
   })
 }
 
-describe('createTransferHandler — snapshots', () => {
-  it('stores state and hands back a code', async () => {
+describe('createTransferHandler', () => {
+  it('stores a snapshot and returns a fresh code', async () => {
     const { handler } = setup()
 
     const response = await handler(postSnapshot({ data: { notes: ['one', 'two'] }, version: 3 }))
@@ -45,7 +45,7 @@ describe('createTransferHandler — snapshots', () => {
     expect(created.expiresAt).toBeTypeOf('string')
   })
 
-  it('reads the state back inline', async () => {
+  it('returns the stored state inline on GET', async () => {
     const { handler } = setup({ app: 'notes' })
 
     const { code } = await (await handler(postSnapshot({ data: { notes: ['one'] }, version: 3 }))).json()
@@ -60,7 +60,7 @@ describe('createTransferHandler — snapshots', () => {
     })
   })
 
-  it('accepts a code typed with the wrong case and separators', async () => {
+  it('normalizes a code typed with the wrong case or separators', async () => {
     const { handler } = setup()
 
     const { code } = await (await handler(postSnapshot({ data: 1 }))).json()
@@ -71,7 +71,7 @@ describe('createTransferHandler — snapshots', () => {
     expect((await response.json()).data).toBe(1)
   })
 
-  it('refuses a snapshot written by a newer schema', async () => {
+  it('answers 409 when the snapshot schema is newer than the reader', async () => {
     const { handler } = setup({ maxVersion: 2 })
 
     const { code } = await (await handler(postSnapshot({ data: {}, version: 5 }))).json()
@@ -81,7 +81,7 @@ describe('createTransferHandler — snapshots', () => {
     expect((await response.json()).error.code).toBe('SNAPSHOT_TOO_NEW')
   })
 
-  it('rejects a body that is not an object with `data`', async () => {
+  it('answers 400 when the body has no `data` property', async () => {
     const { handler } = setup()
 
     const response = await handler(
@@ -92,7 +92,7 @@ describe('createTransferHandler — snapshots', () => {
     expect((await response.json()).error.code).toBe('INVALID_REQUEST')
   })
 
-  it('rejects invalid JSON', async () => {
+  it('answers 400 when the body is not valid JSON', async () => {
     const { handler } = setup()
 
     const response = await handler(
@@ -102,57 +102,8 @@ describe('createTransferHandler — snapshots', () => {
     expect(response.status).toBe(400)
     expect((await response.json()).error.code).toBe('INVALID_REQUEST')
   })
-})
 
-describe('createTransferHandler — files', () => {
-  const bytes = new TextEncoder().encode('%PDF-1.4 pretend')
-
-  it('stores bytes and reports them as a file', async () => {
-    const { handler } = setup()
-
-    const created = await (await handler(postFile(bytes, 'report.pdf'))).json()
-    expect(created.kind).toBe('file')
-
-    const metadata = await (await handler(new Request(`${BASE}/${created.code}`))).json()
-    expect(metadata).toMatchObject({ kind: 'file', filename: 'report.pdf', contentType: 'application/pdf' })
-    // Bytes are never inlined: that is what /raw is for.
-    expect(metadata.data).toBeUndefined()
-  })
-
-  it('serves the bytes from /raw with a download disposition', async () => {
-    const { handler } = setup()
-
-    const { code } = await (await handler(postFile(bytes, 'report.pdf'))).json()
-    const response = await handler(new Request(`${BASE}/${code}/raw`))
-
-    expect(response.status).toBe(200)
-    expect(response.headers.get('content-type')).toBe('application/pdf')
-    expect(response.headers.get('content-disposition')).toContain('report.pdf')
-    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes)
-  })
-
-  it('keeps a filename with characters that headers cannot carry raw', async () => {
-    const { handler } = setup()
-
-    const { code } = await (await handler(postFile(bytes, 'rapport été.pdf'))).json()
-    const metadata = await (await handler(new Request(`${BASE}/${code}`))).json()
-
-    expect(metadata.filename).toBe('rapport été.pdf')
-  })
-
-  it('rejects an empty body', async () => {
-    const { handler } = setup()
-
-    const response = await handler(
-      new Request(BASE, { method: 'POST', headers: { 'content-type': 'application/pdf' }, body: new Uint8Array() }),
-    )
-
-    expect(response.status).toBe(400)
-  })
-})
-
-describe('createTransferHandler — lifecycle', () => {
-  it('burns a code on DELETE', async () => {
+  it('deletes the transfer on DELETE', async () => {
     const { handler } = setup()
 
     const { code } = await (await handler(postSnapshot({ data: 1 }))).json()
@@ -161,13 +112,13 @@ describe('createTransferHandler — lifecycle', () => {
     expect((await handler(new Request(`${BASE}/${code}`))).status).toBe(404)
   })
 
-  it('treats deleting an unknown code as a no-op', async () => {
+  it('answers success when deleting a code that does not exist', async () => {
     const { handler } = setup()
 
     expect((await handler(new Request(`${BASE}/K7QP2M4X`, { method: 'DELETE' }))).status).toBe(204)
   })
 
-  it('answers 404 for an unknown code', async () => {
+  it('answers 404 when the code is unknown', async () => {
     const { handler } = setup()
 
     const response = await handler(new Request(`${BASE}/K7QP2M4X`))
@@ -175,7 +126,7 @@ describe('createTransferHandler — lifecycle', () => {
     expect((await response.json()).error.code).toBe('NOT_FOUND')
   })
 
-  it('answers 400 for something that is not a code at all', async () => {
+  it('answers 400 when the path segment is not a code', async () => {
     const { handler } = setup()
 
     const response = await handler(new Request(`${BASE}/not-a-code!`))
@@ -183,49 +134,20 @@ describe('createTransferHandler — lifecycle', () => {
     expect((await response.json()).error.code).toBe('INVALID_SYNC_CODE')
   })
 
-  it('omits expiresAt when transfers do not expire', async () => {
+  it('omits expiresAt when no expiry is configured', async () => {
     const { handler } = setup({ expiresIn: null })
 
     const created = await (await handler(postSnapshot({ data: 1 }))).json()
     expect(created.expiresAt).toBeUndefined()
   })
-})
 
-describe('createTransferHandler — expiry', () => {
-  beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
-
-  it('stops handing over an expired snapshot', async () => {
-    const { handler } = setup({ expiresIn: 60 })
-
-    const { code } = await (await handler(postSnapshot({ data: 1 }))).json()
-    expect((await handler(new Request(`${BASE}/${code}`))).status).toBe(200)
-
-    vi.setSystemTime(Date.now() + 61_000)
-    expect((await handler(new Request(`${BASE}/${code}`))).status).toBe(404)
-  })
-
-  it('stops handing over an expired file, metadata and bytes alike', async () => {
-    const { handler } = setup({ expiresIn: 60 })
-    const bytes = new TextEncoder().encode('secret')
-
-    const { code } = await (await handler(postFile(bytes, 'secret.txt', 'text/plain'))).json()
-    expect((await handler(new Request(`${BASE}/${code}/raw`))).status).toBe(200)
-
-    vi.setSystemTime(Date.now() + 61_000)
-    expect((await handler(new Request(`${BASE}/${code}`))).status).toBe(404)
-    expect((await handler(new Request(`${BASE}/${code}/raw`))).status).toBe(404)
-  })
-})
-
-describe('createTransferHandler — routing and access', () => {
-  it('ignores paths outside its mount point', async () => {
+  it('passes through a path outside its mount point', async () => {
     const { handler } = setup()
 
     expect((await handler(new Request('http://drop.test/elsewhere'))).status).toBe(404)
   })
 
-  it('honours a custom basePath', async () => {
+  it('serves its routes under a configured basePath', async () => {
     const { handler } = setup({ basePath: '/t' })
 
     const response = await handler(
@@ -239,14 +161,14 @@ describe('createTransferHandler — routing and access', () => {
     expect(response.status).toBe(201)
   })
 
-  it('refuses a method a route does not serve', async () => {
+  it('answers 405 when the method is not served by the route', async () => {
     const { handler } = setup()
 
     expect((await handler(new Request(BASE, { method: 'GET' }))).status).toBe(400)
     expect((await handler(new Request(`${BASE}/K7QP2M4X`, { method: 'POST' }))).status).toBe(400)
   })
 
-  it('answers 401 when authorize refuses', async () => {
+  it('answers 401 when authorize returns false', async () => {
     const { handler } = setup({ authorize: () => false })
 
     const response = await handler(postSnapshot({ data: 1 }))
@@ -254,7 +176,7 @@ describe('createTransferHandler — routing and access', () => {
     expect((await response.json()).error.code).toBe('UNAUTHORIZED')
   })
 
-  it('lets authorize answer with its own response', async () => {
+  it('returns the response authorize supplies', async () => {
     const { handler } = setup({ authorize: () => new Response('nope', { status: 403 }) })
 
     const response = await handler(postSnapshot({ data: 1 }))
@@ -262,7 +184,7 @@ describe('createTransferHandler — routing and access', () => {
     expect(await response.text()).toBe('nope')
   })
 
-  it('sees the request, so authorize can read a header', async () => {
+  it('passes the request to authorize so it can read a header', async () => {
     const seen: string[] = []
     const { handler } = setup({
       authorize: (request) => {
@@ -282,7 +204,7 @@ describe('createTransferHandler — routing and access', () => {
     expect(seen).toEqual(['Bearer t'])
   })
 
-  it('exposes GET/POST/DELETE for a Next route handler', async () => {
+  it('exposes GET, POST and DELETE bindings for a Next route handler', async () => {
     const { handler } = setup()
 
     expect(handler.GET).toBeTypeOf('function')
@@ -292,9 +214,7 @@ describe('createTransferHandler — routing and access', () => {
     const created = await (await handler.POST(postSnapshot({ data: 1 }))).json()
     expect(created.code).toBeTypeOf('string')
   })
-})
 
-describe('createTransferHandler — code collisions', () => {
   it('retries with a fresh code rather than overwriting a live transfer', async () => {
     const { bucket, handler } = setup()
 
@@ -312,5 +232,79 @@ describe('createTransferHandler — code collisions', () => {
     // The first transfer is still intact — that is the whole point.
     const metadata = await (await handler(new Request(`${BASE}/${taken}`))).json()
     expect(metadata.data).toBe('first')
+  })
+
+  describe('with a file body', () => {
+    const bytes = new TextEncoder().encode('%PDF-1.4 pretend')
+
+    it('stores the bytes and reports the transfer as a file', async () => {
+      const { handler } = setup()
+
+      const created = await (await handler(postFile(bytes, 'report.pdf'))).json()
+      expect(created.kind).toBe('file')
+
+      const metadata = await (await handler(new Request(`${BASE}/${created.code}`))).json()
+      expect(metadata).toMatchObject({ kind: 'file', filename: 'report.pdf', contentType: 'application/pdf' })
+      // Bytes are never inlined: that is what /raw is for.
+      expect(metadata.data).toBeUndefined()
+    })
+
+    it('serves the bytes from /raw with an attachment disposition', async () => {
+      const { handler } = setup()
+
+      const { code } = await (await handler(postFile(bytes, 'report.pdf'))).json()
+      const response = await handler(new Request(`${BASE}/${code}/raw`))
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-type')).toBe('application/pdf')
+      expect(response.headers.get('content-disposition')).toContain('report.pdf')
+      expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes)
+    })
+
+    it('percent-encodes a filename that a header cannot carry raw', async () => {
+      const { handler } = setup()
+
+      const { code } = await (await handler(postFile(bytes, 'rapport été.pdf'))).json()
+      const metadata = await (await handler(new Request(`${BASE}/${code}`))).json()
+
+      expect(metadata.filename).toBe('rapport été.pdf')
+    })
+
+    it('answers 400 when the file body is empty', async () => {
+      const { handler } = setup()
+
+      const response = await handler(
+        new Request(BASE, { method: 'POST', headers: { 'content-type': 'application/pdf' }, body: new Uint8Array() }),
+      )
+
+      expect(response.status).toBe(400)
+    })
+  })
+
+  describe('once the transfer has expired', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    it('answers 404 for a snapshot past its expiry', async () => {
+      const { handler } = setup({ expiresIn: 60 })
+
+      const { code } = await (await handler(postSnapshot({ data: 1 }))).json()
+      expect((await handler(new Request(`${BASE}/${code}`))).status).toBe(200)
+
+      vi.setSystemTime(Date.now() + 61_000)
+      expect((await handler(new Request(`${BASE}/${code}`))).status).toBe(404)
+    })
+
+    it('answers 404 for an expired file, on metadata and bytes alike', async () => {
+      const { handler } = setup({ expiresIn: 60 })
+      const bytes = new TextEncoder().encode('secret')
+
+      const { code } = await (await handler(postFile(bytes, 'secret.txt', 'text/plain'))).json()
+      expect((await handler(new Request(`${BASE}/${code}/raw`))).status).toBe(200)
+
+      vi.setSystemTime(Date.now() + 61_000)
+      expect((await handler(new Request(`${BASE}/${code}`))).status).toBe(404)
+      expect((await handler(new Request(`${BASE}/${code}/raw`))).status).toBe(404)
+    })
   })
 })

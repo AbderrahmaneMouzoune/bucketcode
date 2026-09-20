@@ -51,7 +51,7 @@ describe('createTransferClient', () => {
     expect(calls[0]!.init.body).toBeInstanceOf(Uint8Array)
   })
 
-  it('tolerates a baseUrl with a trailing slash', async () => {
+  it('strips a trailing slash from the baseUrl', async () => {
     const { fetchImpl, calls } = stubFetch(created())
     const client = createTransferClient({ baseUrl: `${BASE}/`, fetch: fetchImpl })
 
@@ -60,7 +60,7 @@ describe('createTransferClient', () => {
     expect(calls[0]!.url).toBe(BASE)
   })
 
-  it('encodes the code into the path', async () => {
+  it('percent-encodes the code into the request path', async () => {
     const { fetchImpl, calls } = stubFetch(Response.json({ code: 'A', kind: 'snapshot', createdAt: '' }))
     const client = createTransferClient({ baseUrl: BASE, fetch: fetchImpl })
 
@@ -69,7 +69,7 @@ describe('createTransferClient', () => {
     expect(calls[0]!.url).toBe(`${BASE}/${encodeURIComponent('K7QP 2M4X')}`)
   })
 
-  it('reads the documented error body back into a TransferError', async () => {
+  it('throws a TransferError built from the documented error body', async () => {
     const body = { error: { code: 'TOO_LARGE', message: 'That file is too big.' } }
     const { fetchImpl } = stubFetch(Response.json(body, { status: 413 }))
     const client = createTransferClient({ baseUrl: BASE, fetch: fetchImpl })
@@ -82,7 +82,7 @@ describe('createTransferClient', () => {
     })
   })
 
-  it('still produces a typed error when the server is not one of ours', async () => {
+  it('throws a TransferError when the server response is not one of ours', async () => {
     const { fetchImpl } = stubFetch(new Response('<html>gateway timeout</html>', { status: 504 }))
     const client = createTransferClient({ baseUrl: BASE, fetch: fetchImpl })
 
@@ -93,14 +93,14 @@ describe('createTransferClient', () => {
     expect((error as TransferError).status).toBe(504)
   })
 
-  it('maps a bare 401 to UNAUTHORIZED', async () => {
+  it('throws UNAUTHORIZED on a bare 401', async () => {
     const { fetchImpl } = stubFetch(new Response('', { status: 401 }))
     const client = createTransferClient({ baseUrl: BASE, fetch: fetchImpl })
 
     await expect(client.read('K7QP2M4X')).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
 
-  it('turns 404 into a value, not an exception', async () => {
+  it('returns null rather than throwing on a 404', async () => {
     const body = { error: { code: 'NOT_FOUND', message: 'Unknown or expired code.' } }
     const { fetchImpl } = stubFetch(Response.json(body, { status: 404 }))
     const client = createTransferClient({ baseUrl: BASE, fetch: fetchImpl })
@@ -112,7 +112,7 @@ describe('createTransferClient', () => {
     expect(() => createTransferClient({ baseUrl: BASE })).not.toThrow()
   })
 
-  it('says so plainly on a runtime with no fetch at all', () => {
+  it('throws a readable error on a runtime with no fetch', () => {
     const original = globalThis.fetch
     // @ts-expect-error — simulating an exotic runtime, which is the only case
     // where this guard fires: Node 18+ and every browser ship fetch.

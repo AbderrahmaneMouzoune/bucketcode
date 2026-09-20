@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { createSyncCode, createSyncCodes, normalizeSyncCode, syncCodeAlphabets } from './index.js'
 
-describe('the default scheme', () => {
-  it('is eight characters of Crockford base32', () => {
+describe('createSyncCode', () => {
+  it('returns eight characters drawn from the Crockford base32 alphabet', () => {
     const code = createSyncCode()
 
     expect(code).toHaveLength(8)
@@ -12,83 +12,63 @@ describe('the default scheme', () => {
     }
   })
 
-  it('never emits the characters people confuse', () => {
+  it('never emits I, L, O or U across 200 codes', () => {
     const codes = Array.from({ length: 200 }, () => createSyncCode()).join('')
 
     expect(codes).not.toMatch(/[ILOU]/)
   })
 
-  it('does not repeat itself', () => {
+  it('returns 500 distinct codes across 500 calls', () => {
     expect(new Set(Array.from({ length: 500 }, () => createSyncCode())).size).toBe(500)
   })
+})
 
-  it('accepts what a person actually types', () => {
+describe('normalizeSyncCode', () => {
+  it('folds case and strips spaces, dashes and underscores', () => {
     expect(normalizeSyncCode('k7qp2m4x')).toBe('K7QP2M4X')
     expect(normalizeSyncCode('  K7QP-2M4X ')).toBe('K7QP2M4X')
     expect(normalizeSyncCode('K7QP 2M4X')).toBe('K7QP2M4X')
     expect(normalizeSyncCode('K7QP_2M4X')).toBe('K7QP2M4X')
   })
 
-  it('repairs the misreadings the alphabet makes unambiguous', () => {
+  it('folds O to zero and I and L to one', () => {
     expect(normalizeSyncCode('OIL5')).toBe('0115')
     expect(normalizeSyncCode('oil5')).toBe('0115')
   })
 
-  it('round-trips a generated code', () => {
+  it('returns the original code when given it lowercased', () => {
     const code = createSyncCode()
 
     expect(normalizeSyncCode(code.toLowerCase())).toBe(code)
   })
 
-  it('rejects what the alphabet cannot contain', () => {
+  it('throws INVALID_SYNC_CODE when the input is empty or outside the alphabet', () => {
     expect(() => normalizeSyncCode('K7QP/2M4X')).toThrowError(/not a valid sync code/)
     expect(() => normalizeSyncCode('')).toThrowError(/must not be empty/)
     expect(() => normalizeSyncCode('   ')).toThrowError(/must not be empty/)
     expect(() => normalizeSyncCode('nope!')).toThrowError(expect.objectContaining({ code: 'INVALID_SYNC_CODE' }))
   })
+})
 
-  it('reports what a code is worth guessing against', () => {
+describe('createSyncCodes', () => {
+  it('reports 40 entropy bits for the default scheme', () => {
     expect(createSyncCodes().entropyBits).toBe(40)
   })
-})
 
-describe('a four-digit scheme', () => {
-  const codes = createSyncCodes({ length: 4, alphabet: syncCodeAlphabets.digits })
-
-  it('produces four digits', () => {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      expect(codes.create()).toMatch(/^\d{4}$/)
-    }
-  })
-
-  it('still repairs O and I, because digits leave no ambiguity', () => {
-    expect(codes.normalize('O1I4')).toBe('0114')
-  })
-
-  it('rejects letters', () => {
-    expect(() => codes.normalize('A123')).toThrowError(/not one of 0123456789/)
-  })
-
-  it('is honest about how little it is worth', () => {
-    expect(codes.entropyBits).toBeCloseTo(13.29, 2)
-  })
-})
-
-describe('a custom alphabet', () => {
-  it('keeps case when the alphabet has both', () => {
+  it('keeps case when the alphabet holds both cases', () => {
     const codes = createSyncCodes({ alphabet: 'abcdefABCDEF', length: 4 })
 
     expect(codes.normalize('aBcD')).toBe('aBcD')
   })
 
-  it('does not invent a case fold that would break the alphabet', () => {
+  it('throws on uppercase input when the alphabet is lowercase only', () => {
     const codes = createSyncCodes({ alphabet: 'abcdef', length: 4 })
 
     expect(codes.normalize('abcd')).toBe('abcd')
     expect(() => codes.normalize('ABCD')).toThrowError(/not a valid sync code/)
   })
 
-  it('does not fold O when the alphabet actually contains one', () => {
+  it('leaves O, I and L alone when the alphabet contains them', () => {
     const codes = createSyncCodes({ alphabet: syncCodeAlphabets.alphanumeric, length: 6 })
 
     expect(codes.normalize('OI1L0Z')).toBe('OI1L0Z')
@@ -100,11 +80,33 @@ describe('a custom alphabet', () => {
     ['a dash', 'ABC-DEF'],
     ['a space', 'ABC DEF'],
     ['an underscore', 'ABC_DEF'],
-  ])('rejects %s', (_label, alphabet) => {
+  ])('throws INVALID_CONFIG when the alphabet has %s', (_label, alphabet) => {
     expect(() => createSyncCodes({ alphabet })).toThrowError(expect.objectContaining({ code: 'INVALID_CONFIG' }))
   })
 
-  it.each([0, -1, 65, 4.5])('rejects a length of %s', (length) => {
+  it.each([0, -1, 65, 4.5])('throws INVALID_CONFIG when the length is %s', (length) => {
     expect(() => createSyncCodes({ length })).toThrowError(expect.objectContaining({ code: 'INVALID_CONFIG' }))
+  })
+
+  describe('with a digits-only, four-character scheme', () => {
+    const codes = createSyncCodes({ length: 4, alphabet: syncCodeAlphabets.digits })
+
+    it('returns four digits', () => {
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        expect(codes.create()).toMatch(/^\d{4}$/)
+      }
+    })
+
+    it('folds O to zero and I to one', () => {
+      expect(codes.normalize('O1I4')).toBe('0114')
+    })
+
+    it('throws when the input contains a letter', () => {
+      expect(() => codes.normalize('A123')).toThrowError(/not one of 0123456789/)
+    })
+
+    it('reports 13.29 entropy bits', () => {
+      expect(codes.entropyBits).toBeCloseTo(13.29, 2)
+    })
   })
 })
