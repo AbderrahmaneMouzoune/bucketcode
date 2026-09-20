@@ -22,6 +22,7 @@ export {
 export type {
   BucketConfig,
   BucketCredentials,
+  DeleteOptions,
   GetOptions,
   GetSnapshotOptions,
   GetUrlOptions,

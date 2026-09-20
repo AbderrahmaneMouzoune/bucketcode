@@ -226,6 +226,7 @@ await store.getUrl('invoices/2026-01.pdf', { expiresIn: 300, download: 'Invoice 
 
 | Option      | Type                             | Default                                                                          |
 | ----------- | -------------------------------- | -------------------------------------------------------------------------------- |
+| `prefix`    | `string`                         | the bucket-level `prefix`                                                        |
 | `expiresIn` | `number` (seconds, max `604800`) | `3600`                                                                           |
 | `signed`    | `boolean`                        | `true` unless `publicUrl` is set                                                 |
 | `download`  | `boolean \| string`              | — sets `Content-Disposition: attachment`, with a filename when you pass a string |
@@ -235,16 +236,22 @@ public URL, set `contentDisposition` at upload time instead.
 
 ---
 
-## `delete(key)`
+## `delete(key, options?)`
 
 ```ts
 await store.delete('uploads/a.png')
 await store.delete(['uploads/a.png', 'uploads/b.png']) // batched, 1000 keys per request
+await store.delete('a.png', { prefix: 'tenant-42' }) // whatever prefix wrote it
 ```
+
+| Option   | Type          | Default                   |
+| -------- | ------------- | ------------------------- |
+| `prefix` | `string`      | the bucket-level `prefix` |
+| `signal` | `AbortSignal` | —                         |
 
 Deleting a key that does not exist is a no-op, not an error — the same semantics as S3 itself.
 Passing an array batches into `DeleteObjects` calls of 1000 keys; if S3 reports per-key failures,
-`delete()` throws `DELETE_FAILED` naming them.
+`delete()` throws `DELETE_FAILED` naming them. A `prefix` applies to every key in the batch.
 
 ---
 
