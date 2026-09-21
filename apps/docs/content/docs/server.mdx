@@ -1,0 +1,232 @@
+---
+title: 'Setting up a server'
+description: 'The middle piece, configured end to end: the route, the bucket, authorization, expiry and the smoke test that proves it works.'
+---
+
+The use case s3nd is built for has three parts: an app whose data lives in IndexedDB, a bucket
+you control, and a server between them. This page is the middle one — what to deploy, what to
+configure on it, and how to know it works.
+
+You need it as soon as a **browser** takes part in a transfer. A browser cannot hold S3
+credentials, and a bucket opened to the web is a bucket anyone can read. The server holds the keys
+and answers [four routes](/docs/protocol) instead.
+
+If every participant is a machine you control — your laptop, a CI runner, a backup box — you can
+skip it entirely and point the CLI at the bucket. That is [the next page](/docs/no-server).
+
+## The route
+
+The handler takes a `Request` and returns a `Response`, so it mounts anywhere. In a Next.js app,
+one file is the whole server:
+
+```ts title="app/api/transfers/[[...route]]/route.ts"
+import { createBucket, createTransferHandler } from 's3nd'
+
+const bucket = createBucket({
+  bucket: process.env.S3ND_BUCKET!,
+  prefix: 'transfers',
+  maxSize: 4 * 1024 * 1024,
+})
+
+export const { GET, POST, DELETE } = createTransferHandler({
+  bucket,
+  app: 'notes',
+  maxVersion: 3,
+  expiresIn: 3600,
+  authorize: async (request) => request.headers.get('authorization') === `Bearer ${process.env.S3ND_TOKEN}`,
+})
+```
+
+<Callout>
+  `basePath` defaults to `/api/transfers`. Mount the routes anywhere else and pass the same path, or `GET /:code` reads
+  a code off the wrong segment.
+</Callout>
+
+The catch-all segment matters: the handler serves `/`, `/:code` and `/:code/raw`, so the route file
+has to receive all three.
+
+| Option       | What to set it to                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| `bucket`     | A `Bucket`. Give it a `prefix` — transfers should not share a namespace with anything else. |
+| `app`        | Your app's name. It is recorded in every snapshot, so a bucket says what wrote it.          |
+| `maxVersion` | The newest schema this deployment understands. Older builds then refuse newer snapshots.    |
+| `expiresIn`  | Seconds. An hour is right for a device handover; `null` never expires.                      |
+| `authorize`  | See below. Without it every route is public.                                                |
+| `raw`        | `'stream'` pipes bytes through your server; `'redirect'` answers 302 with a presigned URL.  |
+
+## Credentials
+
+Nothing in the browser ever sees them. On a managed runtime, prefer the role over a key pair —
+nothing to rotate, nothing to leak:
+
+```ts
+// Lambda, ECS, Fly, a VM with an instance role: the SDK finds them.
+const bucket = createBucket({ bucket: process.env.S3ND_BUCKET! })
+```
+
+Where there is no role — Vercel, most container hosts — set the variables and let the default chain
+read them:
+
+```sh
+S3ND_BUCKET=notes-transfers
+S3ND_REGION=eu-west-3
+AWS_ACCESS_KEY_ID=…
+AWS_SECRET_ACCESS_KEY=…
+```
+
+On R2 the same server needs an endpoint instead of a region:
+
+```ts
+const bucket = createBucket({
+  bucket: process.env.S3ND_BUCKET!,
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  },
+  prefix: 'transfers',
+})
+```
+
+Whatever it runs on, the token wants exactly three verbs on one bucket — `s3:PutObject`,
+`s3:GetObject`, `s3:DeleteObject` — and nothing else. A transfer server that can list a bucket is a
+transfer server that can enumerate everyone's codes.
+
+## Authorization
+
+`authorize` runs before anything else. Return `false` for a plain 401, or a `Response` to answer
+with your own.
+
+**A personal drop box behind a proxy.** Nothing to do: leave `authorize` off and let the proxy in
+front decide who reaches the route.
+
+**A shared token**, for a CLI and for CI:
+
+```ts
+authorize: (request) => request.headers.get('authorization') === `Bearer ${process.env.S3ND_TOKEN}`
+```
+
+**A signed-in user**, which is what an app with accounts wants:
+
+```ts
+authorize: async (request) => {
+  const session = await auth(request)
+  if (!session) return Response.json({ error: { code: 'UNAUTHORIZED', message: 'Sign in first.' } }, { status: 401 })
+
+  return true
+}
+```
+
+Two things the check does not do, and should:
+
+- **It does not scope a code to a user.** Anyone signed in who guesses a code reads what it holds.
+  At 40 bits and an hour of life, guessing is not the attack to worry about — but do rate-limit
+  `GET /:code` at the edge, because a code is the only secret protecting a snapshot.
+- **It does not limit how much one account stores.** `maxSize` caps a single transfer, not the
+  number of them. Count them per user if the route is public to your users.
+
+## One prefix per purpose
+
+The `prefix` is the seam that lets each kind of object have its own lifetime:
+
+```ts
+createBucket({ bucket: 'notes-data', prefix: 'transfers' }) // codes, expire in a day
+createBucket({ bucket: 'notes-data', prefix: 'backups' }) // per-account, never expire
+```
+
+`expiresIn` stops a transfer being handed over; it does not delete the object. That is an S3
+lifecycle rule's job, per prefix — a day or two for `transfers/`, nothing at all for `backups/`.
+Forget it and the bucket fills up silently, which is the single most common way a s3nd
+deployment goes wrong. [`s3nd doctor`](/docs/cli) checks for it.
+
+## Request limits
+
+The payload goes through your runtime, so its request limit is your snapshot limit: 4.5 MB on
+Vercel serverless functions, 6 MB on synchronous Lambda. Set `maxSize` below whichever applies and
+an oversized snapshot fails as a clean `TOO_LARGE` before any byte reaches S3, instead of a
+truncated request halfway through.
+
+Snapshots are gzipped, and an IndexedDB dump compresses 5–10×, so the real ceiling is higher than
+it looks. For files, `raw: 'redirect'` keeps the download off your server entirely — the handler
+answers 302 with a presigned URL. See [limits](/docs/limits).
+
+## When the app is on another origin
+
+Same-origin — the app and the route in one Next.js deployment — needs no CORS at all, which is the
+configuration to prefer. If the app is served from somewhere else, the preflight is yours to
+answer: the handler speaks the protocol and nothing more.
+
+```ts title="app/api/transfers/[[...route]]/route.ts"
+const handler = createTransferHandler({ bucket, app: 'notes' })
+
+const CORS = {
+  'access-control-allow-origin': 'https://notes.example.com',
+  'access-control-allow-headers': 'content-type, authorization, x-s3nd-filename',
+  'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS',
+}
+
+async function withCors(request: Request): Promise<Response> {
+  const response = await handler(request)
+  const headers = new Headers(response.headers)
+
+  for (const [name, value] of Object.entries(CORS)) headers.set(name, value)
+
+  return new Response(response.body, { status: response.status, headers })
+}
+
+export const GET = withCors
+export const POST = withCors
+export const DELETE = withCors
+export const OPTIONS = () => new Response(null, { status: 204, headers: CORS })
+```
+
+Note `x-s3nd-filename` in the allowed headers: it is how `createFile` carries the original
+filename, and a preflight that omits it fails on file uploads only — the confusing kind of bug,
+where snapshots work and files do not.
+
+## Proving it works
+
+The CLI speaks the same protocol, so a deployment can be checked from a terminal with no S3
+credentials on it at all:
+
+```sh
+$ s3nd doctor --remote https://notes.example.com/api/transfers --token "$S3ND_TOKEN"
+✓ Server: https://notes.example.com/api/transfers answered
+✓ Create, read, delete: round-tripped code 8WTXQC8R
+```
+
+It creates a transfer, reads it back, deletes it, and exits non-zero if any of that fails — which
+makes it a deployment smoke test:
+
+```yaml title=".github/workflows/deploy.yml"
+- run: npx @s3nd/cli doctor --remote ${{ vars.TRANSFER_URL }} --token ${{ secrets.S3ND_TOKEN }} --json
+```
+
+Keep the deployment in a [profile](/docs/cli#profiles) and the flags disappear:
+
+```json title="s3nd.config.json"
+{
+  "profiles": {
+    "prod": { "remote": "https://notes.example.com/api/transfers", "token": "${S3ND_TOKEN}" },
+    "local": { "remote": "http://localhost:3000/api/transfers" }
+  }
+}
+```
+
+```sh
+s3nd -p prod doctor
+s3nd -p local put ./fixture.json
+```
+
+## The app side
+
+The browser half is `@s3nd/protocol`, or [the React hooks](/docs/react) that wrap it. Neither can
+reach the AWS SDK, so no amount of refactoring in the app can put a credential in a bundle:
+
+```ts
+const transfers = createTransferClient({ baseUrl: '/api/transfers' })
+
+const { code } = await transfers.createSnapshot({ data: await dumpIndexedDb(), version: 3 })
+```
+
+[Moving between two devices](/docs/two-devices) walks the whole round trip, restore included.

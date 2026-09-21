@@ -1,6 +1,6 @@
 ---
 title: 'CLI'
-description: 's3nd from a terminal: move a file between machines, and check that a bucket is actually set up to hold transfers.'
+description: 's3nd from a terminal: move a file between machines, check that a bucket is set up to hold transfers, and keep the settings in a file instead of in your shell history.'
 ---
 
 `@s3nd/cli` is its own package, built on `s3nd` as a primitive — so nothing a command
@@ -14,11 +14,34 @@ Or globally, for the drop-box use:
 
 ```sh
 npm install -g @s3nd/cli
+s3nd init --provider r2 --bucket transfers
+s3nd doctor
 s3nd put ./report.pdf
 ```
 
 It has no dependencies of its own beyond `s3nd`: `node:util`'s `parseArgs` is the whole
 argument parser.
+
+## `init`
+
+Writes a starting point for the provider you name, then tells you what is left to do:
+
+```sh
+$ s3nd init --provider r2 --bucket transfers
+Wrote /home/you/transfers/s3nd.config.json
+
+Put the three values in .env, and keep it out of git:
+  R2_ACCOUNT_ID=…
+  R2_ACCESS_KEY_ID=…
+  R2_SECRET_ACCESS_KEY=…
+The R2 API token needs Object Read & Write on this bucket, and nothing else.
+Give the bucket a lifecycle rule that deletes objects under "transfers/" after a day or two.
+Run `s3nd doctor` — it performs the operations s3nd needs and reports what happened.
+```
+
+`--provider` takes `aws`, `r2`, `minio`, `scaleway`, `wasabi` or `remote`; each writes the endpoint,
+region and credential references that provider actually wants. It refuses to overwrite an existing
+file unless you pass `--force`. [Without a server](/docs/no-server) follows the R2 one end to end.
 
 ## `doctor`
 
@@ -28,6 +51,7 @@ all of that into a list:
 
 ```sh
 $ s3nd doctor
+Using /home/you/transfers/s3nd.config.json
 ✓ Configuration: bucket "transfers", region "eu-west-3"
 ✓ Credentials: resolved, key ends in 1234
 ✓ Bucket reachable: HeadBucket succeeded
@@ -57,7 +81,7 @@ $ s3nd doctor --remote https://drop.example.com/api/transfers --token "$TOKEN"
 
 ```sh
 $ s3nd put ./report.pdf
-report.pdf, 284 kB, expires 14/09/2026 10:25
+report.pdf · 284 kB · expires in 1 hour
 K7QP2M4X
 ```
 
@@ -67,18 +91,163 @@ The code goes to stdout and everything else to stderr, so it composes:
 CODE=$(s3nd put ./report.pdf)
 ```
 
+`put -` reads stdin instead, which is how a directory or a database dump travels:
+
+```sh
+tar cz ./project | s3nd put - --name project.tar.gz
+pg_dump notes | gzip | s3nd put - --name notes.sql.gz --expires-in 7d
+```
+
 On the other machine:
 
 ```sh
 $ s3nd get K7QP2M4X
-Wrote report.pdf (284 kB)
+Wrote /home/you/report.pdf · 284 kB
 
 $ s3nd rm K7QP2M4X
 Burned K7QP2M4X
 ```
 
-`get` writes to the stored filename unless you pass `-o`; `-o -` sends the payload to stdout.
-A code holding a [snapshot](/docs/snapshots) rather than a file prints its JSON instead.
+`get` writes to the stored filename unless you pass `-o`; `-o -` sends the payload to stdout. A
+code holding a [snapshot](/docs/snapshots) rather than a file prints its JSON instead.
+
+## `config`
+
+What the CLI resolved, and — the part that ends most confusions — where each value came from:
+
+```sh
+$ s3nd config
+file         /home/you/transfers/s3nd.config.json (profile "r2")
+profiles     r2, local
+mode         straight to S3
+
+bucket       transfers                                 $S3ND_BUCKET
+region       auto                                      s3nd.config.json (r2)
+endpoint     https://8c4….r2.cloudflarestorage.com     s3nd.config.json (r2)
+prefix       drops                                     --prefix
+credentials  …1a2b                                     s3nd.config.json (r2)
+expires in   1 day                                     s3nd.config.json (r2)
+```
+
+It never prints a secret: the access key id is masked to its last four characters, and the secret
+and the bearer token are only ever reported as set. It reads no credentials and touches no bucket,
+so it works before anything else does.
+
+## The configuration file
+
+Everything the flags take, in a file the CLI finds by itself:
+
+```json title="s3nd.config.json"
+{
+  "bucket": "transfers",
+  "region": "auto",
+  "endpoint": "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+  "prefix": "transfers",
+  "expiresIn": "24h",
+  "envFile": ".env",
+  "credentials": {
+    "accessKeyId": "${R2_ACCESS_KEY_ID}",
+    "secretAccessKey": "${R2_SECRET_ACCESS_KEY}"
+  }
+}
+```
+
+| Key              | Value                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `bucket`         | Bucket name.                                                                         |
+| `region`         | Region. `"auto"` for providers that ignore it.                                       |
+| `endpoint`       | S3-compatible endpoint. Setting it turns on path-style addressing.                   |
+| `forcePathStyle` | Override that, for a gateway that wants virtual-host style.                          |
+| `prefix`         | Key prefix inside the bucket. One per purpose — it is what a lifecycle rule targets. |
+| `publicUrl`      | Public base URL or CDN in front of the bucket.                                       |
+| `expiresIn`      | `3600`, `"24h"`, `"7d"`, or `null` for transfers that do not expire.                 |
+| `credentials`    | `{ accessKeyId, secretAccessKey, sessionToken? }`. Omit for the AWS provider chain.  |
+| `remote`         | Talk to a s3nd server instead of S3. The credentials then live there, not here.      |
+| `token`          | Bearer token sent with `remote`.                                                     |
+| `envFile`        | Read these `KEY=value` pairs before expanding `${…}`. Relative to the file it is in. |
+| `profiles`       | Named overrides — see below.                                                         |
+
+Anything else is rejected by name, with the key it was probably meant to be:
+
+```sh
+$ s3nd config
+Unknown key "buckett" in /home/you/transfers/s3nd.config.json. Did you mean "bucket"?
+```
+
+### Where it is looked for
+
+1. `--config <path>`, or `$S3ND_CONFIG`. An explicit path that is not there is an error, never a
+   silent fallback.
+2. `s3nd.config.json`, `.s3ndrc.json` or `.s3ndrc`, from the working directory upwards — so a
+   config beside the project is found from any directory inside it.
+3. `~/.config/s3nd/config.json` (or `$XDG_CONFIG_HOME/s3nd/config.json`), for the machine-wide one.
+
+The first file found wins outright. Two files being merged is the kind of thing nobody can debug
+from the outside.
+
+### Secrets stay outside it
+
+`${VAR}` in any string is read from the environment, and `envFile` names a file to load first —
+without overwriting anything the shell already set, so an exported variable stays the last word.
+A missing one is reported by name before any request is made:
+
+```sh
+$ s3nd put ./report.pdf
+"endpoint" in /home/you/transfers/s3nd.config.json references ${R2_ACCOUNT_ID}, which is not set.
+Set it in /home/you/transfers/.env, or export it before running s3nd.
+```
+
+So the file is committable and the keys are not. An env file the config merely _declares_ may be
+missing — the variables can just as well be exported — while one passed as `--env-file` must exist.
+
+### Profiles
+
+One file, several setups, chosen with `-p` or `$S3ND_PROFILE`:
+
+```json title="s3nd.config.json"
+{
+  "bucket": "transfers",
+  "prefix": "drops",
+  "profiles": {
+    "prod": { "remote": "https://drop.example.com/api/transfers", "token": "${S3ND_TOKEN}" },
+    "local": {
+      "endpoint": "http://localhost:9000",
+      "credentials": { "accessKeyId": "minioadmin", "secretAccessKey": "minioadmin" }
+    }
+  }
+}
+```
+
+```sh
+s3nd -p local doctor
+s3nd -p prod put ./report.pdf
+```
+
+A profile overrides the root key by key, `credentials` included as one unit: half a key pair,
+inherited from two places, is not something anyone means to configure.
+
+## What beats what
+
+A flag beats an environment variable, which beats the configuration file, which beats the default.
+`s3nd config` prints the winner of each.
+
+| Setting       | Flag           | Environment                                       |
+| ------------- | -------------- | ------------------------------------------------- |
+| `bucket`      | `--bucket`     | `S3ND_BUCKET`, `S3_BUCKET`                        |
+| `region`      | `--region`     | `S3ND_REGION`, `AWS_REGION`, `AWS_DEFAULT_REGION` |
+| `endpoint`    | `--endpoint`   | `S3ND_ENDPOINT`, `S3_ENDPOINT`                    |
+| `prefix`      | `--prefix`     | `S3ND_PREFIX`                                     |
+| `publicUrl`   | —              | `S3ND_PUBLIC_URL`, `S3_PUBLIC_URL`                |
+| `expiresIn`   | `--expires-in` | `S3ND_EXPIRES_IN`                                 |
+| `remote`      | `--remote`     | `S3ND_REMOTE`                                     |
+| `token`       | `--token`      | `S3ND_TOKEN`                                      |
+| `credentials` | —              | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`      |
+| the file      | `--config`     | `S3ND_CONFIG`                                     |
+| the profile   | `--profile`    | `S3ND_PROFILE`                                    |
+
+Credentials have no flag on purpose: a secret in an argument is a secret in `ps` and in your shell
+history. Put them in the environment, in an env file, or leave them to the AWS provider chain —
+a profile, an instance role, an SSO session.
 
 ## Against your own server
 
@@ -94,22 +263,29 @@ to `fetch` or, without `--remote`, straight into the handler in the same process
 cannot drift apart, because there is only one of them.
 
 The practical consequence: your laptop needs no S3 credentials. It holds a token for your own
-deployment, which holds the credentials.
+deployment, which holds the credentials. [Setting up a server](/docs/server) is that side of it.
 
 ## Options
 
-| Option                | What it does                                                |
-| --------------------- | ----------------------------------------------------------- |
-| `--remote <url>`      | Talk to a s3nd server instead of S3 directly                |
-| `--token <token>`     | Bearer token sent with `--remote`                           |
-| `--bucket <name>`     | Bucket name, overriding `$S3ND_BUCKET`                      |
-| `--prefix <prefix>`   | Key prefix inside the bucket                                |
-| `--expires-in <secs>` | Transfer lifetime; `0` for one that does not expire         |
-| `-o, --output <path>` | Where `get` writes. `-` is stdout                           |
-| `--json`              | Machine-readable output, for scripts and for `doctor` in CI |
+| Option                 | What it does                                                |
+| ---------------------- | ----------------------------------------------------------- |
+| `-c, --config <path>`  | Configuration file to read                                  |
+| `-p, --profile <name>` | Profile to use inside it                                    |
+| `--env-file <path>`    | Read `KEY=value` pairs from this file first                 |
+| `--bucket <name>`      | Bucket name                                                 |
+| `--prefix <prefix>`    | Key prefix inside the bucket                                |
+| `--region <name>`      | Region                                                      |
+| `--endpoint <url>`     | S3-compatible endpoint                                      |
+| `--expires-in <d>`     | Transfer lifetime: `3600`, `30m`, `24h`, `7d`, or `never`   |
+| `--remote <url>`       | Talk to a s3nd server instead of S3 directly                |
+| `--token <token>`      | Bearer token sent with `--remote`                           |
+| `--name <filename>`    | Filename to store the transfer under                        |
+| `-o, --output <path>`  | Where `get` writes. `-` is stdout                           |
+| `--json`               | Machine-readable output, for scripts and for `doctor` in CI |
+| `--provider <name>`    | Which starter `init` writes                                 |
+| `--force`              | Let `init` overwrite an existing file                       |
 
-Configuration otherwise comes from the same environment variables as the library —
-`S3ND_BUCKET`, `S3ND_REGION`, `S3ND_ENDPOINT`, and the usual AWS credentials.
-See [configuration](/docs/configuration).
-
-<Callout>`s3nd doctor --json` exits non-zero when a check fails, so it works as a deployment smoke test.</Callout>
+<Callout>
+  Every command exits non-zero when it fails, `doctor` included — so `s3nd doctor --json` works as a deployment smoke
+  test. Colour is dropped when the output is not a terminal, and when `NO_COLOR` is set.
+</Callout>

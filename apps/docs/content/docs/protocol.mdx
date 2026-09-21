@@ -25,6 +25,8 @@ export const { GET, POST, DELETE } = createTransferHandler({
 
 The handler takes a `Request` and returns a `Response` — nothing else. That is a Next route
 handler, a Hono route, `Bun.serve`, Deno, or a worker, without an adapter for any of them.
+[Setting up a server](/docs/server) configures the rest of it: credentials, authorization, expiry,
+request limits and CORS.
 
 <Callout type="warn">
   Every route is public unless you pass `authorize`. For a personal drop box behind a proxy that is what you want; for

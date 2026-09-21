@@ -16,6 +16,8 @@
     "---Guides---",
     "configuration",
     "providers",
+    "server",
+    "no-server",
     "limits",
     "errors",
     "testing",
