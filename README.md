@@ -1,130 +1,54 @@
-# s3nd
+# bucketcode → s3nd
 
-Move a local-first app's data from one device to another, through your own bucket.
+> [!IMPORTANT]
+> This repository has moved to **[AbderrahmaneMouzoune/s3nd](https://github.com/AbderrahmaneMouzoune/s3nd)**
+> and is archived. It is kept read-only so existing links, clones and forks keep resolving;
+> everything — the code, the full commit history, the open issues — carried over.
 
-```ts
-import { createBucket } from 's3nd'
+The project outgrew its name. `bucketcode` described the two things you could see, a bucket and a
+code, but what the package does is move a local-first app's data from one device to another. The
+packages were renamed to say so, and the repository followed.
 
-const store = createBucket({ bucket: 'my-bucket', prefix: 'snapshots' })
+| What                     | Where it is now                                                                                           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Source and history       | [AbderrahmaneMouzoune/s3nd](https://github.com/AbderrahmaneMouzoune/s3nd)                                 |
+| Issues and pull requests | [s3nd/issues](https://github.com/AbderrahmaneMouzoune/s3nd/issues)                                        |
+| Documentation            | [apps/docs](https://github.com/AbderrahmaneMouzoune/s3nd/tree/main/apps/docs)                             |
+| The IndexedDB example    | [examples/indexeddb-sync](https://github.com/AbderrahmaneMouzoune/s3nd/tree/main/examples/indexeddb-sync) |
 
-// On the old device: hand the user a code.
-const code = store.codes.create() // "K7QP2M4X"
-await store.putSnapshot(code, state, { app: 'notes', version: 3, expiresIn: 3600 })
+## If you depend on `bucketcode`
 
-// On the new device: they type it in.
-const snapshot = await store.getSnapshot(store.codes.normalize(typed), { maxVersion: 3 })
-snapshot?.data // → the state, ready to write back into IndexedDB
-```
-
-Your app keeps everything in IndexedDB: fast, offline, private. Then the user opens it on their
-phone and it is empty, because IndexedDB does not leave the browser it was written in. s3nd
-is the small server-side piece that closes that gap.
-
-Credentials stay on your server — the browser only ever talks to your own API, so there is no CORS
-policy to write on the bucket and nothing to sign client-side. Works with AWS S3, Cloudflare R2,
-MinIO, Scaleway and any S3-compatible storage.
+`bucketcode@0.1.0` stays on npm and keeps working — nothing was unpublished. It is deprecated
+rather than removed, and it receives no further releases. New work happens on `s3nd`:
 
 ```sh
+npm uninstall bucketcode
 npm install s3nd
 ```
 
-**[Read the documentation →](./apps/docs)** · **[Run the IndexedDB example →](./examples/indexeddb-sync)**
+What the rename touched, and nothing else:
 
-## This repository
+| `bucketcode@0.1.0`                     | `s3nd`                     |
+| -------------------------------------- | -------------------------- |
+| `import … from 'bucketcode'`           | `import … from 's3nd'`     |
+| `BucketCodeError`, `isBucketCodeError` | `S3ndError`, `isS3ndError` |
+| `BucketCodeErrorCode`                  | `S3ndErrorCode`            |
 
-A bun workspace monorepo, driven by Turborepo.
+`createBucket`, `putSnapshot`, `getSnapshot`, `upload`, `put`, `get`, `getUrl`, `delete`, the
+sync-code helpers and every exported type keep their names and their behaviour.
 
-| Path                                                   | What it is                                                                                                  |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| [`packages/protocol`](./packages/protocol)             | `@s3nd/protocol` — the wire contract, a client, sync codes. No storage client, so it bundles for a browser. |
-| [`packages/s3nd`](./packages/s3nd)                     | `s3nd` — the S3 primitive: snapshots, files, the handler.                                                   |
-| [`packages/react`](./packages/react)                   | `@s3nd/react` — hooks. Depends on the protocol, never on S3.                                                |
-| [`packages/cli`](./packages/cli)                       | `@s3nd/cli` — the `s3nd` binary, built on the primitive.                                                    |
-| [`apps/docs`](./apps/docs)                             | The documentation site — guides, use cases, API reference.                                                  |
-| [`examples/indexeddb-sync`](./examples/indexeddb-sync) | A notes app in IndexedDB, moved between devices with a code.                                                |
-| [`examples/node-script`](./examples/node-script)       | Snapshot round-trip, expiry and conflicts in one file.                                                      |
+Three packages were split out of the original one, so a browser bundle no longer has to drag an S3
+client along: [`@s3nd/protocol`](https://github.com/AbderrahmaneMouzoune/s3nd/tree/main/packages/protocol)
+(the wire contract and sync codes), [`@s3nd/react`](https://github.com/AbderrahmaneMouzoune/s3nd/tree/main/packages/react)
+(hooks) and [`@s3nd/cli`](https://github.com/AbderrahmaneMouzoune/s3nd/tree/main/packages/cli)
+(the `s3nd` binary). Using `s3nd` alone requires none of them.
 
-The split follows one constraint: a browser must never end up with a storage client in its
-dependency tree. `@s3nd/protocol` is what both halves share, which is why it exists at all
-rather than living inside `s3nd`.
+## Snapshots already in your bucket
 
-```
-@s3nd/protocol   nanoid                      the contract, shared by everything
-s3nd             + aws-sdk, protocol         the S3 primitive
-@s3nd/react      + protocol, react (peer)    hooks — no path to S3
-@s3nd/cli        + s3nd                the binary
-```
-
-## Working on it
-
-A [bun](https://bun.com) workspace, with [Turborepo](https://turborepo.dev) running the tasks.
-
-```sh
-bun install
-bun run build        # turbo build across the workspace
-bun run test         # the package's test suite
-bun run type-check
-bun run lint
-bun run format
-```
-
-Run the docs site locally with `bun run --filter @s3nd/docs dev` — it listens on
-[localhost:3100](http://localhost:3100).
-
-bun installs and orchestrates; the toolchain itself still runs on Node. That is deliberate rather
-than half-finished: `s3nd` is published for Node, so the test suite runs on Node — CI runs it
-on 20, 22 and 24 — and `.bin/vitest` carries a `#!/usr/bin/env node` shebang, so it picks up
-whichever version is on `PATH`. Switching the runner to `bun test` would trade that coverage for a
-second or two of wall clock.
-
-The test suite is offline: it runs against an in-memory stand-in for S3 that honours the
-conditional headers, so snapshots genuinely round-trip without credentials or network. For an
-integration check against the real protocol, point an example at a local MinIO:
-
-```sh
-docker run -p 9000:9000 -p 9001:9001 \
-  -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-  quay.io/minio/minio server /data --console-address ":9001"
-```
-
-## Releasing
-
-Releases are driven by [release-please](https://github.com/googleapis/release-please) and by the
-commit messages that land on `main`, which follow
-[Conventional Commits](https://www.conventionalcommits.org/). Pull requests are squash-merged, so
-the pull request title is the message that counts — CI checks its shape on every pull request.
-
-| A commit on `main`                         | Takes 0.1.0 to                         |
-| ------------------------------------------ | -------------------------------------- |
-| `fix: …`                                   | 0.1.1                                  |
-| `feat: …`                                  | 0.2.0                                  |
-| `feat!: …`, or a `BREAKING CHANGE:` footer | 0.2.0 — the major bump waits for 1.0.0 |
-| `chore: …`, `ci: …`, `docs: …`, `test: …`  | nowhere, no release                    |
-
-Only commits touching `packages/s3nd` release it; the docs site, the examples and the
-workflows do not.
-
-While there is something to release, the [release workflow](./.github/workflows/release.yml) keeps
-a `chore: release x.y.z` pull request open, carrying the version bump and the entry it would add to
-[the changelog](./packages/s3nd/CHANGELOG.md). Merging it is the release: the commit is
-tagged `vx.y.z`, the GitHub release is created from that changelog entry, and the package is
-published to npm with provenance.
-
-[`release-please-config.json`](./release-please-config.json) holds the settings;
-[`.release-please-manifest.json`](./.release-please-manifest.json) holds the last released version
-and is rewritten by release-please, so leave it alone.
-
-Two repository secrets:
-
-- `NPM_TOKEN`, with publish rights. If you would rather use npm trusted publishing, configure this
-  repository as a trusted publisher on npm and drop the `NODE_AUTH_TOKEN` line from the workflow —
-  the `id-token: write` permission it already grants is what OIDC needs.
-- `RELEASE_PLEASE_TOKEN`, optional: a personal access token with `contents` and `pull-requests`
-  write access. GitHub skips workflows on pull requests opened with the default `GITHUB_TOKEN`, so
-  without it the release pull request shows no checks.
-
-Running the workflow by hand with **Publish** ticked publishes the version currently on `main` —
-the way out when a release was tagged but the publish step failed.
+They still read back. A snapshot written by `bucketcode@0.1.0` carries the marker under its old
+name, and `s3nd` accepts it — a snapshot is data sitting in someone's bucket, not code they can
+re-run, so the rename must not make one unreadable. Nothing to migrate, and no expiry on that
+promise.
 
 ## License
 
