@@ -1,6 +1,6 @@
 {
   "name": "@s3nd/react",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "React hooks for s3nd transfers: send a snapshot or a file, read a code back, and a sync code input that repairs what the user typed.",
   "keywords": [
     "s3nd",
@@ -55,7 +55,7 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
-    "@s3nd/protocol": "^0.1.0"
+    "@s3nd/protocol": "^0.2.0"
   },
   "peerDependencies": {
     "react": ">=18"
